@@ -475,10 +475,10 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                   return (
                     <div key={i} className="group relative flex items-start py-[2px] -mx-1 px-1 rounded transition hover:bg-[#f5f5f7]">
                       <div className="flex-shrink-0 w-8 pt-[1px]">
-                        <span className="text-[10px] text-[#d0d0d5] font-mono select-none group-hover:hidden">{lineNum}</span>
+                        <span className="text-[10px] text-[#d0d0d5] font-mono select-none group-hover:opacity-0 transition">{lineNum}</span>
                         <button
                           onClick={() => { setActiveCommentLine(isActive ? null : lineNum); setInlineComment(""); }}
-                          className="hidden group-hover:inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#e5e5ea] text-[#86868b] hover:bg-[#0071e3] hover:text-white transition text-[10px] leading-none"
+                          className="absolute left-0 top-0 opacity-0 group-hover:opacity-100 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#e5e5ea] text-[#86868b] hover:bg-[#0071e3] hover:text-white transition text-[12px] leading-none font-bold"
                         >+</button>
                       </div>
                       <div className="flex-1 min-w-0">
