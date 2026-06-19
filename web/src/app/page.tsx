@@ -350,9 +350,9 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [members, setMembers] = useState<{ userId: string; role: string; name: string | null; email: string | null }[]>([]);
   const [invites, setInvites] = useState<{ id: string; email: string; role: string; token: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null);
+  const [inlineComment, setInlineComment] = useState("");
   const [comments, setComments] = useState<{ id: string; lineNumber: number; content: string; authorName: string | null; authorEmail: string | null; authorId: string; resolvedAt: string | null; resolvedById: string | null; createdAt: string }[]>([]);
-  const [newCommentLine, setNewCommentLine] = useState("");
-  const [newCommentText, setNewCommentText] = useState("");
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
 
   const loadDoc = useCallback(async (path: string) => {
@@ -404,14 +404,13 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   }
 
   async function addComment() {
-    if (!doc || !newCommentText.trim()) return;
-    const line = parseInt(newCommentLine) || 0;
+    if (!doc || !inlineComment.trim() || activeCommentLine === null) return;
     try {
       await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineNumber: line, content: newCommentText.trim() }),
+        body: JSON.stringify({ lineNumber: activeCommentLine, content: inlineComment.trim() }),
       });
-      setNewCommentText(""); setNewCommentLine("");
+      setInlineComment(""); setActiveCommentLine(null);
       loadComments();
     } catch {}
   }
@@ -461,39 +460,78 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col overflow-hidden">
           {mode === "view" && (
-            <div className="flex flex-1">
-              <div className="flex-1 flex flex-col items-center overflow-y-auto">
-                <article className="branch-markdown w-full max-w-[720px] px-10 py-12">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
-                </article>
-              </div>
+            <div className="flex flex-1 flex-col items-center overflow-y-auto relative">
+              <article className="branch-markdown w-full max-w-[720px] px-10 pt-12 pb-24">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
+              </article>
 
-              <div className="w-[200px] flex-shrink-0 border-l border-[#e5e5ea] bg-white overflow-y-auto">
-                <div className="px-3 py-2.5 border-b border-[#f5f5f7]">
-                  <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Comments</p>
-                </div>
-                <div className="px-2 py-1 space-y-1.5">
-                  {comments.length === 0 && <p className="py-4 text-center text-[11px] text-[#86868b]">No comments</p>}
-                  {[...comments].sort((a, b) => a.lineNumber - b.lineNumber).map((c) => (
-                    <div key={c.id} className={`rounded-md border px-2 py-1.5 ${c.resolvedAt ? "border-amber-100 bg-amber-50/50" : "border-[#e5e5ea]"}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium text-[#0071e3]">Ln {c.lineNumber}</span>
-                        {c.resolvedAt ? (
-                          <span className="text-[10px] text-amber-600">Resolved</span>
-                        ) : (
-                          <button onClick={() => resolveComment(c.id)} className="text-[10px] text-[#0071e3] hover:underline">Resolve</button>
-                        )}
+              <div className="w-full max-w-[720px] px-10 pb-24">
+                {doc.content.split("\n").map((line, i) => {
+                  const lineNum = i + 1;
+                  const lineComments = comments.filter((c) => c.lineNumber === lineNum);
+                  const hasUnresolved = lineComments.some((c) => !c.resolvedAt);
+                  const isActive = activeCommentLine === lineNum;
+
+                  return (
+                    <div key={i} className="group relative flex items-start py-[2px] -mx-1 px-1 rounded transition hover:bg-[#f5f5f7]">
+                      <div className="flex-shrink-0 w-8 pt-[1px]">
+                        <span className="text-[10px] text-[#d0d0d5] font-mono select-none group-hover:hidden">{lineNum}</span>
+                        <button
+                          onClick={() => { setActiveCommentLine(isActive ? null : lineNum); setInlineComment(""); }}
+                          className="hidden group-hover:inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#e5e5ea] text-[#86868b] hover:bg-[#0071e3] hover:text-white transition text-[10px] leading-none"
+                        >+</button>
                       </div>
-                      <p className="mt-0.5 text-[11px] text-[#1d1d1f] leading-relaxed">{c.content}</p>
-                      <p className="mt-0.5 text-[10px] text-[#86868b]">{c.authorName || c.authorEmail?.split("@")[0]}</p>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[15px] leading-[1.55] whitespace-pre-wrap text-[#1d1d1f]">{line || " "}</span>
+                      </div>
+
+                      {hasUnresolved && (
+                        <div className="flex-shrink-0 w-5 pt-[1px]">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#0071e3]/10 text-[#0071e3] text-[10px] font-medium">{lineComments.filter((c) => !c.resolvedAt).length}</span>
+                        </div>
+                      )}
+
+                      {(isActive || lineComments.length > 0) && (
+                        <div className="absolute right-0 top-full z-10 mt-1 w-[300px] rounded-xl border border-[#e5e5ea] bg-white shadow-lg">
+                          {lineComments.map((c) => (
+                            <div key={c.id} className={`px-3 py-2.5 border-b border-[#f5f5f7] last:border-b-0 ${c.resolvedAt ? "opacity-50" : ""}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center text-[10px] font-bold uppercase">{(c.authorName || c.authorEmail || "?")[0]}</div>
+                                  <span className="text-[12px] font-medium text-[#1d1d1f]">{c.authorName || c.authorEmail?.split("@")[0]}</span>
+                                </div>
+                                <span className="text-[10px] text-[#86868b]">{new Date(c.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                              </div>
+                              <p className={`mt-1.5 text-[13px] leading-relaxed ${c.resolvedAt ? "line-through text-[#86868b]" : "text-[#1d1d1f]"}`}>{c.content}</p>
+                              <div className="mt-1.5 flex gap-2">
+                                {!c.resolvedAt && <button onClick={() => resolveComment(c.id)} className="text-[11px] text-[#0071e3] hover:underline">Resolve</button>}
+                                {c.authorId === userId && !c.resolvedAt && <button onClick={() => deleteComment(c.id)} className="text-[11px] text-[#ff3b30] hover:underline">Delete</button>}
+                                {c.resolvedAt && <span className="text-[11px] text-amber-600 font-medium">Resolved</span>}
+                              </div>
+                            </div>
+                          ))}
+                          {isActive && (
+                            <div className="px-3 py-2.5 border-t border-[#e5e5ea]">
+                              <textarea
+                                autoFocus
+                                className="w-full rounded-lg border border-[#e5e5ea] bg-[#f9f9fb] px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] focus:bg-white resize-none"
+                                rows={2}
+                                placeholder="Add a comment..."
+                                value={inlineComment}
+                                onChange={(e) => setInlineComment(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } if (e.key === "Escape") setActiveCommentLine(null); }}
+                              />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={() => setActiveCommentLine(null)} className="rounded-full border border-[#e5e5ea] px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#f5f5f7]">Cancel</button>
+                                <button onClick={addComment} disabled={!inlineComment.trim()} className="rounded-full bg-[#0071e3] px-4 py-1 text-[12px] font-medium text-white transition hover:bg-[#0077ed] disabled:opacity-30">Comment</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-                <div className="border-t border-[#e5e5ea] p-2 space-y-1.5">
-                  <input className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3]" placeholder="Line number" value={newCommentLine} onChange={(e) => setNewCommentLine(e.target.value)} />
-                  <textarea className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3] resize-none" rows={2} placeholder="Comment..." value={newCommentText} onChange={(e) => setNewCommentText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }} />
-                  <button onClick={addComment} className="w-full rounded-md bg-[#0071e3] py-1 text-[11px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
-                </div>
+                  );
+                })}
               </div>
             </div>
           )}
