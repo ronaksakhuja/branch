@@ -1,0 +1,25 @@
+{
+  "name": "getbranch",
+  "version": "0.1.0",
+  "description": "CLI for Branch — Git for documents. Push markdown to your cloud workspace from the terminal.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "branch": "src/index.js"
+  },
+  "files": [
+    "src/index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["branch", "markdown", "documents", "version-control", "cli", "git-for-docs"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anomalyco/branch"
+  },
+  "scripts": {
+    "check": "node --check src/index.js"
+  }
+}
