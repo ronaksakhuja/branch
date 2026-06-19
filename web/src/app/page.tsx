@@ -153,9 +153,12 @@ function AppShell({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [newWsName, setNewWsName] = useState("");
 
-  useEffect(() => {
-    fetchWorkspaces(true).then(setWorkspaces).catch(() => {}).finally(() => setLoading(false));
+  const refreshWorkspaces = useCallback(async () => {
+    const data = await fetchWorkspaces(true);
+    setWorkspaces(data);
   }, []);
+
+  useEffect(() => { refreshWorkspaces().finally(() => setLoading(false)); }, [refreshWorkspaces]);
 
   if (loading) return <div className="flex h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-1.5 w-32 rounded-full bg-[#e5e5ea] animate-pulse" /></div>;
 
@@ -164,13 +167,13 @@ function AppShell({ userId }: { userId: string }) {
   if (urlW && currentWs) {
     return urlD
       ? <DocumentView workspaceId={currentWs.id} workspace={currentWs} userId={userId} workspaces={workspaces} />
-      : <WorkspaceView workspace={currentWs} userId={userId} workspaces={workspaces} />;
+      : <WorkspaceView workspace={currentWs} userId={userId} workspaces={workspaces} refreshWorkspaces={refreshWorkspaces} />;
   }
 
-  return <HomeView workspaces={workspaces} userId={userId} newWsName={newWsName} setNewWsName={setNewWsName} />;
+  return <HomeView workspaces={workspaces} userId={userId} newWsName={newWsName} setNewWsName={setNewWsName} refreshWorkspaces={refreshWorkspaces} />;
 }
 
-function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces: WorkspaceRecord[]; userId: string; newWsName: string; setNewWsName: (v: string) => void }) {
+function HomeView({ workspaces, userId, newWsName, setNewWsName, refreshWorkspaces }: { workspaces: WorkspaceRecord[]; userId: string; newWsName: string; setNewWsName: (v: string) => void; refreshWorkspaces: () => void }) {
   const router = useRouter();
 
   const yours = workspaces.filter((w) => !w.ownerId || w.ownerId === userId || w.role === "owner");
@@ -179,6 +182,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
   async function create() {
     const n = newWsName.trim(); if (!n) return;
     const r = await createWorkspace(n, slugify(n));
+    await refreshWorkspaces();
     router.replace(`/?w=${slugify(n)}`);
     setNewWsName("");
   }
@@ -187,7 +191,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center justify-between border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-5 flex-shrink-0">
         <div className="flex items-center gap-1.5">
-          <button onClick={() => router.push("/")} className="text-[15px] font-semibold text-[#1d1d1f] transition hover:opacity-70">Branch</button>
+          <button onClick={() => router.replace("/")} className="text-[15px] font-semibold text-[#1d1d1f] transition hover:opacity-70">Branch</button>
           <span className="text-[#c5c5ca] text-[13px]">—</span>
           <span className="text-[13px] text-[#86868b]">Workspaces</span>
         </div>
@@ -220,7 +224,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {yours.map((w, i) => (
-                  <button key={w.id} onClick={() => router.push(`/?w=${w.slug}`)}
+                  <button key={w.id} onClick={() => router.replace(`/?w=${w.slug}`)}
                     className="group relative rounded-2xl border border-[#e5e5ea] bg-white p-5 text-left transition hover:border-[#d0d0d5] hover:shadow-sm active:scale-[0.99]">
                     <div className="w-8 h-8 rounded-lg mb-3 flex items-center justify-center" style={{ backgroundColor: `${wsColor(i)}15`, color: wsColor(i) }}>
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="1.5" width="12" height="13" rx="2" stroke="currentColor" strokeWidth="1.3"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
@@ -237,7 +241,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
                   <h2 className="mt-10 mb-4 text-[13px] font-semibold text-[#86868b] uppercase tracking-wider">Shared with you</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {shared.map((w, i) => (
-                      <button key={w.id} onClick={() => router.push(`/?w=${w.slug}`)}
+                      <button key={w.id} onClick={() => router.replace(`/?w=${w.slug}`)}
                         className="group relative rounded-2xl border border-[#e5e5ea] bg-white p-5 text-left transition hover:border-[#d0d0d5] hover:shadow-sm active:scale-[0.99]">
                         <div className="w-8 h-8 rounded-lg bg-[#f5f5f7] mb-3 flex items-center justify-center text-[#86868b]">
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M3 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
@@ -257,21 +261,26 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
   );
 }
 
-function WorkspaceView({ workspace, userId, workspaces }: { workspace: WorkspaceRecord; userId: string; workspaces: WorkspaceRecord[] }) {
+function WorkspaceView({ workspace, userId, workspaces, refreshWorkspaces }: { workspace: WorkspaceRecord; userId: string; workspaces: WorkspaceRecord[]; refreshWorkspaces: () => void }) {
   const router = useRouter();
   const [docs, setDocs] = useState<DocMeta[]>([]);
   const [newDocName, setNewDocName] = useState("");
 
-  useEffect(() => { fetchDocuments(workspace.id).then(setDocs).catch(() => {}); }, [workspace.id]);
+  const refreshDocs = useCallback(async () => {
+    const data = await fetchDocuments(workspace.id);
+    setDocs(data);
+  }, [workspace.id]);
+
+  useEffect(() => { refreshDocs(); }, [refreshDocs]);
 
   async function createDoc() { const n = newDocName.trim() || "untitled"; const p = `notes/${n}.md`;
-    try { await createDocumentApi(workspace.id, p, `# ${n}\n\n`, "Created"); const metas = await fetchDocuments(workspace.id); setDocs(metas); setNewDocName(""); router.push(`/?w=${workspace.slug}&d=${encodeURIComponent(p)}`); } catch {}
+    try { await createDocumentApi(workspace.id, p, `# ${n}\n\n`, "Created"); setNewDocName(""); await refreshDocs(); router.replace(`/?w=${workspace.slug}&d=${encodeURIComponent(p)}`); } catch {}
   }
 
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-2">
-        <button onClick={() => router.push("/")} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
+        <button onClick={() => router.replace("/")} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           Branch
         </button>
@@ -303,7 +312,7 @@ function WorkspaceView({ workspace, userId, workspaces }: { workspace: Workspace
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {docs.map((d) => (
-                <button key={d.id} onClick={() => router.push(`/?w=${workspace.slug}&d=${encodeURIComponent(d.path)}`)}
+                <button key={d.id} onClick={() => router.replace(`/?w=${workspace.slug}&d=${encodeURIComponent(d.path)}`)}
                   className="group relative rounded-2xl border border-[#e5e5ea] bg-white p-5 text-left transition hover:border-[#d0d0d5] hover:shadow-sm active:scale-[0.99]">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-7 h-7 rounded-md bg-[#f5f5f7] flex items-center justify-center text-[#86868b]">
@@ -372,7 +381,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-2">
-        <button onClick={() => router.push(`/?w=${workspace.slug}`)} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
+        <button onClick={() => router.replace(`/?w=${workspace.slug}`)} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           {workspace.name}
         </button>
