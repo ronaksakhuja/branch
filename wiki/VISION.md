@@ -1,161 +1,116 @@
 # Vision
 
-**Branch is the home for knowledge.**
+**Branch is where knowledge lives.**
 
-GitHub became the home for code. Branch becomes the home for everything else
-— strategy, research, decisions, plans, specs, and ideas that humans and AI
-create together.
+Not scattered across Claude threads, Google Docs, Notion pages, and local markdown files. In one place. With history. With the ability to roll back. With AI as a first-class collaborator, not an afterthought.
 
 ---
 
-## The Problem
+## The Problem We Solve
 
-### Documents are dying
+### Documents are now co-authored by humans and AI
 
-Every day, people use AI to create important documents. Claude writes a
-strategy memo. ChatGPT drafts a research plan. A founder refines it in Google
-Docs. Then they paste it back into Claude for the next iteration.
+You ask Claude to draft a strategy memo. You refine it. Claude revises it. You share it with a colleague. They edit it. Claude proposes more changes. Before you know it, there are six versions spread across three tools and nobody knows which is current.
 
-This creates disconnected copies. The original markdown, the Google Doc
-version, the Claude revisions, the exported PDF — each is a snapshot that
-drifts from the others. Nobody knows which is current.
+### Existing tools were built for a world without AI
 
-### Knowledge becomes fragmented
+Google Docs is great for real-time typing, but AI doesn't use cursors. Notion is great for databases, but its markdown export is an afterthought. Git is perfect for code, but nobody wants to explain `git rebase` to a product manager. None of these tools treat AI as a collaborator with equal standing — the ability to read, propose, and commit changes with attribution.
 
-Over weeks and months, the problem compounds:
+### Knowledge has no home
 
-- **Lost history** — you do not know what changed, when, or by whom
-- **Lost context** — the AI's original reasoning is gone, replaced by flat text
-- **Lost trust** — you hesitate to let AI edit because you fear losing your work
-- **Lost collaboration** — humans and AI work on competing copies, never the same document
-
-### The loop nobody asked for
-
-```
-Claude → Markdown → Google Docs → Human edits → Claude → New markdown → Manual merging
-```
-
-Documents become dead artifacts instead of living knowledge.
+Your documents are scattered. There is no single place where all your important thinking lives, versioned, searchable, and accessible to both you and your AI tools. Branch is that home.
 
 ---
 
-## Why Existing Tools Fall Short
+## What Branch Is
 
-| Tool | What it does well | What it misses |
-|------|-------------------|----------------|
-| Google Docs | Real-time collaboration | No markdown, no AI workflow, version history is buried |
-| Notion | Rich documents, databases | Proprietary format, no CLI, limited AI integration |
-| Obsidian | Local markdown, linked thinking | No cloud sync, no AI commit log, no sharing without plugins |
-| GitHub | Version control | Built for code, intimidating for non-devs, no markdown viewer |
-| Git (raw) | Perfect history | No web UI, no non-technical UX, AI tools do not integrate natively |
+Branch is a **cloud markdown workspace** where every document has full version history, every change is attributed (human or AI), and every version is reviewable and restorable.
 
-None of them are designed for the human + AI editing loop.
+Under the hood, every workspace is a real Git repository. Real commits. Real diffs. Real rollbacks. But the interface is document-native — it feels like reading and writing, not like version control.
 
----
+### Three surfaces, one product
 
-## The Insight
-
-**Documents should behave like code.**
-
-Code has:
-- Version history (git log)
-- Change reviews (diffs, PRs)
-- Rollbacks
-- Authorship per change
-- A single source of truth
-- Branching and merging
-
-Documents deserve the same. But the interface must be document-native, not
-developer-native. A markdown viewer that feels like reading, not like a code
-editor. A version history that reads like a changelog, not `git log --oneline`.
+| Surface | For |
+|---------|-----|
+| **Web app** | Reading, writing, reviewing, sharing. Google Docs-like, Apple-inspired design. |
+| **CLI** | Local editing, AI agents. `branch pull`, `branch diff`, `branch push --author Claude`. |
+| **MCP server** | Claude Desktop native access. Six tools. Direct read/write/commit from Claude. |
 
 ---
 
-## How Branch Solves It
+## How Branch Works
 
-### One source of truth
+### A workspace is a Git repo
 
-Every document lives in a Branch workspace. Markdown is the canonical format —
-portable, AI-readable, and human-editable. No more competing copies.
+When you create a workspace, Branch creates a private GitHub repository. Every document save is a Git commit. Every version is a commit in the log. Every diff is a real `git diff`. You get the full power of Git — branches, merging, history — without ever touching a terminal.
 
 ### Every change is reviewable
 
-When you or an AI edits a document, Branch records:
-- Who made the change (Human, Claude, ChatGPT)
-- What changed (line-by-line diff)
-- Why (human-readable summary)
-- When
+Open any document and see its version history in the right sidebar. Click any version to see what changed. Restore with one click. You never wonder what AI changed or how to get back.
 
-You never wonder what AI changed or how to get back to a previous version.
+### AI is a first-class collaborator
 
-### Humans and AI edit the same document
+Claude, ChatGPT, Gemini — they read documents through the CLI or MCP. They propose changes. You review. They commit. The version history shows "Author: Claude" next to "Author: Ronak." AI is not an integration — it's a user.
 
-AI tools connect through the CLI, local files, or MCP. They read, search,
-propose, and (when trusted) commit changes. Humans review in the web app.
+### Sharing that works
 
-### No lock-in
+Create a read-only link for any document. Send it to anyone. They see a beautifully rendered page — no sign-in required. Invite collaborators to your workspace. They get edit access. It's Google Docs sharing with Git underneath.
 
-Documents are markdown. Your knowledge is portable. Bring your own AI model.
-Switch providers tomorrow. The documents remain yours.
+---
 
-### CLI for power users and AI
+## The Product Today
 
-```bash
-branch pull           # download workspace
-branch diff           # inspect changes (also --json for agents)
-branch push           # commit with attribution
-branch history        # full version log
-```
+We've built:
 
-AI coding agents (Claude Code, Cursor, Copilot) can read and edit local
-markdown files, then use the CLI to inspect and push changes.
+- **Web app** — Next.js on Vercel, Clerk auth, Neon Postgres, GitHub API backend
+- **Three-view UX** — Home (workspace cards), Workspace (document grid), Document (editor with version sidebar)
+- **CLI** — Published as `getbranch` on npm. Browser-based auth. `pull`, `push`, `diff`, `log`, `status`
+- **MCP server** — Published as `branch-mcp`. Six tools for Claude Desktop
+- **Collaboration** — Invite-by-email, workspace members, roles, pending invites
+- **Sharing** — Read-only links with beautiful public pages
+- **Landing page** — Explains the product to new users
+- **Logging** — In-memory ring buffer at `/api/logs`
 
 ---
 
 ## The Product Promise
 
-**Never lose your edits. Never wonder what AI changed.**
+> **Never lose your edits. Never wonder what AI changed.**
+
+Every document in Branch has a complete, attributed history. You can see who changed what, when, and why. You can restore any version. You can share with confidence. AI and humans edit the same source of truth.
 
 ---
 
 ## What Branch Is Not
 
-- Not a Google Docs replacement for real-time multiplayer editing
-- Not a Notion clone for databases and project management
-- Not a Git client — Git powers the engine, but the UX is document-first
-- Not an AI platform — it works with any model, it does not lock you in
+Branch is not:
+- A Google Docs replacement — we are not building real-time multiplayer editing
+- A Notion clone — we are not building databases, kanban boards, or wikis
+- A Git client — Git powers the engine, but the UX hides it
+- An AI platform — you bring your own models, we don't lock you in
+
+Branch is the home for your important documents. The ones you edit over weeks and months. The ones AI helps you write. The ones you need to revisit, revise, and share.
 
 ---
 
 ## Long-Term Vision
 
-### Phase 1: Trusted AI Documents (now)
+### Today: Personal knowledge
+A single user, their workspace, their documents, their AI tools. Versioned. Reviewable. Shareable.
 
-Version-controlled markdown workspaces where humans and AI can safely edit
-the same documents.
+### Tomorrow: Team knowledge
+Shared workspaces with permissions. A team's strategy docs, specs, decisions, and research — living in Branch instead of scattered across Slack, Notion, and Google Drive.
 
-### Phase 2: Team Knowledge (next)
-
-Shared workspaces, permissions, and review workflows. A team's strategy docs,
-specs, and decisions live in Branch instead of scattered across Slack, Notion,
-and Google Drive.
-
-### Phase 3: The Home for Knowledge (future)
-
-Branch is where you store, evolve, and revisit important thinking. Personal.
-Professional. Team. Organizational. Every document is a living artifact with
-history, context, and provenance.
-
-GitHub made code collaborative and versioned. Branch makes knowledge
-collaborative and versioned — between humans, and between humans and AI.
+### The future: The home for knowledge
+Where you store, evolve, and revisit important thinking. Personal. Professional. Team. Organizational. Every document is a living artifact with history, context, and provenance.
 
 ---
 
 ## Principles
 
-1. **Documents are markdown** — portable, universal, AI-native
-2. **History is non-negotiable** — every change is tracked, attributed, reversible
-3. **AI is a first-class collaborator** — not an afterthought or integration
+1. **Documents are markdown** — portable, universal, AI-readable
+2. **Git underneath, document on top** — real version control, zero learning curve
+3. **AI is a first-class user** — read, propose, commit, with attribution
 4. **Humans stay in control** — review before commit, rollback anytime
 5. **No lock-in** — your documents, your models, your tools
-6. **UI is document-native** — it should feel like reading and writing, not like version control
+6. **Beautiful by default** — Apple-inspired design, content-first, intuitive
