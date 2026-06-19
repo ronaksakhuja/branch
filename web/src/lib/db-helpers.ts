@@ -153,6 +153,8 @@ export async function getDocumentVersions(documentId: string) {
 }
 
 export async function getVersionDiff(versionIdA: string, versionIdB: string) {
+  const workspaceId = "";
+  const doc = ""; 
   return { older: null, newer: null, olderContent: "", newerContent: "" };
 }
 

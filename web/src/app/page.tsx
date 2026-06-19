@@ -342,6 +342,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [author, setAuthor] = useState<AuthorType>("Human");
   const [mode, setMode] = useState<"view" | "edit" | "diff">("view");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedVersionContent, setSelectedVersionContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
@@ -361,6 +362,20 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   useEffect(() => { if (urlD) loadDoc(urlD); }, [urlD, loadDoc]);
 
   const selectedVersion = useMemo(() => doc ? doc.versions.find((v) => v.id === selectedVersionId) || doc.versions.at(-1) || null : null, [doc, selectedVersionId]);
+
+  async function selectVersion(v: VersionRecord) {
+    setSelectedVersionId(v.id);
+    setSelectedVersionContent(null);
+    setMode("diff");
+    try {
+      const latest = doc!.versions[0]; // versions are newest-first
+      const res = await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc!.path)}/diff?from=${v.id}&to=${latest.id}`);
+      const data = await res.json();
+      setSelectedVersionContent(data.olderContent || "");
+    } catch {
+      setSelectedVersionContent("");
+    }
+  }
   const changed = doc ? draft !== doc.content : false;
 
   async function save() { if (!doc || !changed || saving) return; setSaving(true);
@@ -424,12 +439,16 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
             <div className="flex flex-1 flex-col bg-[#1d1d1f]">
               <div className="flex items-center justify-between px-4 py-2 text-[#86868b]">
                 <p className="text-[12px]">Changes from v{selectedVersion?.versionNumber}</p>
-                {selectedVersion && <button onClick={() => { setDraft(selectedVersion.content); setSummary(`Restored v${selectedVersion.versionNumber}`); setMode("edit"); }} className="rounded-md px-3 py-1 text-[12px] font-medium text-[#f5f5f7] transition hover:bg-white/10">Restore</button>}
+                {selectedVersion && selectedVersionContent !== null && <button onClick={() => { setDraft(selectedVersionContent); setSummary(`Restored v${selectedVersion.versionNumber}`); setMode("edit"); }} className="rounded-md px-3 py-1 text-[12px] font-medium text-[#f5f5f7] transition hover:bg-white/10">Restore</button>}
               </div>
               <pre className="flex-1 overflow-auto p-4 font-mono text-[13px] leading-6">
-                {selectedVersion ? computeDiff(doc.content, selectedVersion.content).split("\n").map((line, i) => (
-                  <span key={i} className={line.startsWith("+") ? "block bg-[#30d158]/10 text-[#30d158]" : line.startsWith("-") ? "block bg-[#ff453a]/10 text-[#ff453a]" : "block text-[#86868b]"}>{line}</span>
-                )) : <span className="text-[#86868b]">Select a version</span>}
+                {selectedVersionContent === null
+                  ? <span className="text-[#86868b]">Loading version content...</span>
+                  : selectedVersionContent === ""
+                    ? <span className="text-[#86868b]">Could not load version content</span>
+                    : computeDiff(doc.content, selectedVersionContent).split("\n").map((line, i) => (
+                        <span key={i} className={line.startsWith("+") ? "block bg-[#30d158]/10 text-[#30d158]" : line.startsWith("-") ? "block bg-[#ff453a]/10 text-[#ff453a]" : "block text-[#86868b]"}>{line}</span>
+                      ))}
               </pre>
             </div>
           )}
@@ -450,7 +469,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
             <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
             <div className="px-1.5 space-y-0.5">
               {[...doc.versions].reverse().map((v) => (
-                <button key={v.id} onClick={() => { setSelectedVersionId(v.id); setMode("diff"); }}
+                <button key={v.id} onClick={() => selectVersion(v)}
                   className={`w-full rounded-md px-2.5 py-2 text-left transition ${selectedVersion?.id === v.id ? "bg-[#0071e3]/10" : "hover:bg-[#f5f5f7]"}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[12px] font-medium">v{v.versionNumber}</span>
