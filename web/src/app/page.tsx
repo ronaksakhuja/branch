@@ -186,7 +186,11 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center justify-between border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-5 flex-shrink-0">
-        <h1 className="text-[15px] font-semibold text-[#1d1d1f]">Branch</h1>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[15px] font-semibold text-[#1d1d1f]">Branch</span>
+          <span className="text-[#c5c5ca] text-[13px]">—</span>
+          <span className="text-[13px] text-[#86868b]">Workspaces</span>
+        </div>
         <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
 
@@ -266,11 +270,14 @@ function WorkspaceView({ workspace, userId, workspaces }: { workspace: Workspace
 
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
-      <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-3">
-        <button onClick={() => router.push("/")} className="rounded-md p-1 text-[#86868b] transition hover:bg-black/5 hover:text-[#1d1d1f]">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-2">
+        <button onClick={() => router.push("/")} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          Branch
         </button>
+        <span className="text-[#c5c5ca]">/</span>
         <span className="text-[15px] font-semibold text-[#1d1d1f]">{workspace.name}</span>
+        <span className="text-[12px] text-[#86868b] ml-1">— Documents</span>
         <div className="flex-1" />
         <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
@@ -365,14 +372,14 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
 
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
-      <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-3">
-        <button onClick={() => router.push(`/?w=${workspace.slug}`)} className="rounded-md p-1 text-[#86868b] transition hover:bg-black/5 hover:text-[#1d1d1f]">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <header className="flex h-12 items-center border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 flex-shrink-0 gap-2">
+        <button onClick={() => router.push(`/?w=${workspace.slug}`)} className="flex items-center gap-1 text-[13px] text-[#0071e3] font-medium transition hover:opacity-70">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          {workspace.name}
         </button>
-        <span className="text-[13px] text-[#86868b]">{workspace.name}</span>
-        <span className="text-[#86868b]">/</span>
+        <span className="text-[#c5c5ca]">/</span>
         <span className="text-[15px] font-semibold text-[#1d1d1f] truncate">{doc.title}</span>
-        <span className="text-[12px] text-[#86868b]">v{doc.versions.length}</span>
+        <span className="text-[12px] text-[#86868b] ml-1">v{doc.versions.length}</span>
         <div className="flex-1" />
         <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded-lg border border-[#e5e5ea] px-3 py-1 text-[12px] font-medium text-[#1d1d1f] transition hover:bg-[#f5f5f7]">Share</button>
         <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
