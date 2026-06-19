@@ -79,3 +79,33 @@ export const documentVersions = pgTable(
     index("document_versions_document_idx").on(table.documentId),
   ],
 );
+
+export const gitObjects = pgTable(
+  "git_objects",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    hash: text("hash").notNull(),
+    type: text("type", { enum: ["blob", "tree", "commit", "tag"] }).notNull(),
+    content: text("content").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.hash] }),
+    index("git_objects_type_idx").on(table.workspaceId, table.type),
+  ],
+);
+
+export const gitRefs = pgTable(
+  "git_refs",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    ref: text("ref").notNull(),
+    targetHash: text("target_hash").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.ref] }),
+  ],
+);
