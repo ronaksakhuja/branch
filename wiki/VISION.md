@@ -10,17 +10,29 @@ Not scattered across Claude threads, Google Docs, Notion pages, and local markdo
 
 ## The Problem We Solve
 
-### Documents are now co-authored by humans and AI
+### The loop nobody asked for
 
-You ask Claude to draft a strategy memo. You refine it. Claude revises it. You share it with a colleague. They edit it. Claude proposes more changes. Before you know it, there are six versions spread across three tools and nobody knows which is current.
+You ask Claude to draft a strategy memo. It writes markdown. You copy it into Google Docs. You make small tweaks — fix a number, add a bullet, rephrase a sentence. Then you need Claude to do a revision. You copy the Google Doc back into markdown. You paste it into Claude. "Here are my changes, now revise for XYZ." Claude outputs new markdown. You copy it into Google Docs again.
 
-### Existing tools were built for a world without AI
+This loop repeats every time you iterate. With every cycle you lose:
+- What changed between versions
+- Which edits were yours vs. the AI's
+- The reasoning behind any change
+- Trust that you're working on the latest version
 
-Google Docs is great for real-time typing, but AI doesn't use cursors. Notion is great for databases, but its markdown export is an afterthought. Git is perfect for code, but nobody wants to explain `git rebase` to a product manager. None of these tools treat AI as a collaborator with equal standing — the ability to read, propose, and commit changes with attribution.
+The document is never a living artifact — it's a series of disconnected snapshots.
 
-### Knowledge has no home
+### Existing tools miss the point
 
-Your documents are scattered. There is no single place where all your important thinking lives, versioned, searchable, and accessible to both you and your AI tools. Branch is that home.
+Google Docs is great for real-time typing, but AI doesn't use cursors. Notion is great for databases, but its markdown is an afterthought. GitHub is perfect for code, but nobody wants to teach a product manager `git rebase`. None of these tools treat AI as a collaborator — someone who reads, proposes, and commits changes with the same standing as a human.
+
+### AI needs context, not just content
+
+When an AI reviews a document, it needs more than the current text. It needs to know what changed, why, and who made each decision. It needs the comment threads, the version history, the context of every revision. Without this, it's guessing. With it, it's informed.
+
+### The future is AI-to-AI
+
+Your AI and my AI will collaborate. Your AI reviews a document, sees the full commit history and comment threads, understands the context, and proposes changes. My AI reviews them. Humans stay in the loop — making the small judgment calls that only they can — but the heavy lifting happens between agents. Branch is the shared workspace where that conversation lives.
 
 ---
 
@@ -102,9 +114,11 @@ A single user, their workspace, their documents, their AI tools. Versioned. Revi
 
 ### Tomorrow: Team knowledge
 Shared workspaces with permissions. A team's strategy docs, specs, decisions, and research — living in Branch instead of scattered across Slack, Notion, and Google Drive.
-
 ### The future: The home for knowledge
+
 Where you store, evolve, and revisit important thinking. Personal. Professional. Team. Organizational. Every document is a living artifact with history, context, and provenance.
+
+Where AI agents collaborate on your behalf — your AI reviews a document, sees every commit and comment for context, proposes changes, and my AI reviews. Humans make the judgment calls. Agents do the heavy lifting. Branch is the shared workspace where that conversation lives.
 
 ---
 
