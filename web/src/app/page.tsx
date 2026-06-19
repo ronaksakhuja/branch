@@ -166,8 +166,8 @@ function AppShell({ userId }: { userId: string }) {
 
   if (urlW && currentWs) {
     return urlD
-      ? <DocumentView workspaceId={currentWs.id} workspace={currentWs} userId={userId} workspaces={workspaces} />
-      : <WorkspaceView workspace={currentWs} userId={userId} workspaces={workspaces} refreshWorkspaces={refreshWorkspaces} />;
+      ? <DocumentView key={`${urlW}-${urlD}`} workspaceId={currentWs.id} workspace={currentWs} userId={userId} workspaces={workspaces} />
+      : <WorkspaceView key={urlW + (searchParams.get("_t") || "")} workspace={currentWs} userId={userId} workspaces={workspaces} refreshWorkspaces={refreshWorkspaces} />;
   }
 
   return <HomeView workspaces={workspaces} userId={userId} newWsName={newWsName} setNewWsName={setNewWsName} refreshWorkspaces={refreshWorkspaces} />;
@@ -378,7 +378,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
 
   async function deleteDoc() {
     if (!doc || !confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
-    try { await deleteDocument(workspaceId, doc.path, "Deleted"); docCache.current.delete(doc.path); setDoc(null); router.replace(`/?w=${workspace.slug}`); } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    try { await deleteDocument(workspaceId, doc.path, "Deleted"); docCache.current.delete(doc.path); setDoc(null); router.replace(`/?w=${workspace.slug}&_t=${Date.now()}`); } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
 
   if (!doc) return <div className="flex h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-1.5 w-32 rounded-full bg-[#e5e5ea] animate-pulse" /></div>;
