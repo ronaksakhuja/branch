@@ -9,7 +9,7 @@ import {
   fetchWorkspaces, createWorkspace, fetchDocuments, getDocument,
   createDocumentApi, updateDocument,
   fetchShareLinks, createShareLink, revokeShareLink,
-  fetchMembers, createInvite, fetchInvites, cancelInvite, removeMember,
+  fetchMembers, createInvite, fetchInvites, cancelInvite, removeMember, deleteDocument,
 } from "@/lib/api";
 
 type AuthorType = "Human" | "AI";
@@ -376,6 +376,11 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   async function cancelInv(id: string) { await cancelInvite(workspaceId, id); setInvites((i) => i.filter((inv) => inv.id !== id)); }
   async function removePerson(uid: string) { await removeMember(workspaceId, uid); loadShareData(); }
 
+  async function deleteDoc() {
+    if (!doc || !confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    try { await deleteDocument(workspaceId, doc.path, "Deleted"); docCache.current.delete(doc.path); setDoc(null); router.replace(`/?w=${workspace.slug}`); } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+  }
+
   if (!doc) return <div className="flex h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-1.5 w-32 rounded-full bg-[#e5e5ea] animate-pulse" /></div>;
 
   return (
@@ -461,6 +466,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
           <div className="border-t border-[#e5e5ea] p-3 space-y-2">
             <button onClick={() => { setMode("edit"); setDraft(doc.content); }} className="w-full rounded-full bg-[#0071e3] py-1.5 text-[13px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Edit</button>
             <button onClick={() => { loadShareData(); setShowShare(true); }} className="w-full rounded-full border border-[#e5e5ea] bg-white py-1.5 text-[13px] text-[#1d1d1f] transition hover:bg-[#f5f5f7]">Share</button>
+            <button onClick={deleteDoc} className="w-full rounded-full border border-[#e5e5ea] bg-white py-1.5 text-[13px] text-[#ff3b30] transition hover:bg-red-50">Delete</button>
           </div>
         </aside>
       </div>
