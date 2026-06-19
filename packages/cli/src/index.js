@@ -5,307 +5,495 @@ import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 
-const branchDirectoryName = ".branch";
-const configFileName = "config.json";
-const DEFAULT_API_URL = process.env.BRANCH_API_URL || "https://web-iota-ruby-62.vercel.app";
+const B = "\u001b[1m";
+const D = "\u001b[2m";
+const R = "\u001b[0m";
+const GREEN = "\u001b[32m";
+const RED = "\u001b[31m";
+const YELLOW = "\u001b[33m";
+const CYAN = "\u001b[36m";
+const GRAY = "\u001b[90m";
 
-function fail(message) {
-  console.error(`Error: ${message}`);
-  process.exit(1);
-}
+const branchDir = ".branch";
+const configFile = "config.json";
+const API = process.env.BRANCH_API_URL || "https://web-iota-ruby-62.vercel.app";
+
+let spinnerTimer = null;
+function spin(msg) { process.stdout.write(`\r${GRAY}  ${msg}${R}`); spinnerTimer = setInterval(() => {}, 100); }
+function spinDone() { if (spinnerTimer) { clearInterval(spinnerTimer); process.stdout.write(`\r${" ".repeat(60)}\r`); } }
+
+function die(msg) { console.error(`${RED}${B}✗${R} ${msg}`); process.exit(1); }
+function ok(msg) { console.log(`${GREEN}${B}✓${R} ${msg}`); }
+function info(msg) { console.log(`${GRAY}  ${msg}${R}`); }
+function warn(msg) { console.log(`${YELLOW}${B}!${R} ${msg}`); }
+function key(k, v) { console.log(`  ${GRAY}${k.padEnd(12)}${R} ${v}`); }
 
 function parseFlags(args) {
   const flags = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg.startsWith("--")) continue;
-    const key = arg.slice(2);
-    const next = args[index + 1];
-    if (!next || next.startsWith("--")) {
-      flags[key] = true;
-      continue;
-    }
-    flags[key] = next;
-    index += 1;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith("-")) continue;
+    const k = a.replace(/^--?/, "");
+    const n = args[i + 1];
+    if (!n || n.startsWith("-")) { flags[k] = true; continue; }
+    flags[k] = n; i++;
   }
   return flags;
 }
 
-function ensureDirectory(path) {
-  mkdirSync(path, { recursive: true });
-}
+function ensureDir(p) { mkdirSync(p, { recursive: true }); }
 
-function findWorkspaceRoot(start = process.cwd()) {
-  let current = resolve(start);
-  while (current !== dirname(current)) {
-    if (existsSync(join(current, branchDirectoryName, configFileName))) {
-      return current;
-    }
-    current = dirname(current);
+function findRoot(start = process.cwd()) {
+  let c = resolve(start);
+  while (c !== dirname(c)) {
+    if (existsSync(join(c, branchDir, configFile))) return c;
+    c = dirname(c);
   }
   return null;
 }
 
-function readConfig(root) {
-  return JSON.parse(readFileSync(join(root, branchDirectoryName, configFileName), "utf8"));
+function readCfg(root) { return JSON.parse(readFileSync(join(root, branchDir, configFile), "utf8")); }
+function writeCfg(root, cfg) { writeFileSync(join(root, branchDir, configFile), JSON.stringify(cfg, null, 2) + "\n"); }
+
+function reqCfg() {
+  const root = findRoot();
+  if (!root) die("No workspace found. Run ${B}branch init${R} first.");
+  return { root, cfg: readCfg(root) };
 }
 
-function writeConfig(root, config) {
-  writeFileSync(join(root, branchDirectoryName, configFileName), `${JSON.stringify(config, null, 2)}\n`);
+function authHeader(cfg) {
+  const uid = process.env.BRANCH_USER_ID || cfg.userId;
+  if (!uid) die("Not logged in. Run ${B}branch login${R} first.");
+  return `Bearer ${uid}.cli`;
 }
 
-function requireConfig() {
-  const root = findWorkspaceRoot();
-  if (!root) fail("No Branch workspace found. Run `branch init` first.");
-  return { root, config: readConfig(root) };
-}
-
-function getAuth(config) {
-  const userId = process.env.BRANCH_USER_ID || config.userId;
-  if (!userId) fail("Not authenticated. Run `branch auth` first.");
-  return `Bearer ${userId}.cli`;
-}
-
-async function apiFetch(config, path, options = {}) {
-  const url = `${DEFAULT_API_URL}${path}`;
-  const headers = {
-    Authorization: getAuth(config),
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-  const res = await fetch(url, { ...options, headers });
+async function api(cfg, path, opts = {}) {
+  const url = `${API}${path}`;
+  const h = { Authorization: authHeader(cfg), "Content-Type": "application/json", ...opts.headers };
+  const res = await fetch(url, { ...opts, headers: h });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) fail(`API ${res.status}: ${body.error || "Unknown error"}`);
+  if (!res.ok) die(`API ${res.status}: ${body.error || "Unknown error"}`);
   return body;
 }
 
-function readLocalDocuments(root) {
+function readLocalMarkdown(root) {
   const files = [];
-  function walk(directory) {
-    for (const entry of readdirSync(directory)) {
-      if (entry === branchDirectoryName || entry === "node_modules" || entry === ".git" || entry === ".next") continue;
-      const absolutePath = join(directory, entry);
-      const details = statSync(absolutePath);
-      if (details.isDirectory()) { walk(absolutePath); continue; }
-      if (details.isFile() && entry.endsWith(".md")) {
-        files.push({ path: relative(root, absolutePath).split("\\").join("/"), content: readFileSync(absolutePath, "utf8") });
-      }
+  function walk(d) {
+    for (const e of readdirSync(d)) {
+      if (e === branchDir || e === "node_modules" || e === ".git" || e === ".next") continue;
+      const fp = join(d, e); const st = statSync(fp);
+      if (st.isDirectory()) { walk(fp); continue; }
+      if (st.isFile() && e.endsWith(".md")) files.push({ path: relative(root, fp).split("\\").join("/"), content: readFileSync(fp, "utf8") });
     }
   }
   walk(root);
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function getLocalChanges(root, pulledState) {
-  const local = readLocalDocuments(root);
-  const pulled = pulledState || {};
+function localChanges(root, pulled) {
+  const local = readLocalMarkdown(root);
+  const pulledMap = pulled || {};
   const changes = [];
-  const localByPath = new Map(local.map((f) => [f.path, f]));
-  for (const file of local) {
-    const pd = pulled[file.path];
-    if (!pd) { changes.push({ type: "added", path: file.path, content: file.content }); }
-    else if (file.content !== pd.content) { changes.push({ type: "changed", path: file.path, before: pd.content, after: file.content }); }
+  const localMap = new Map(local.map(f => [f.path, f]));
+  for (const f of local) {
+    const p = pulledMap[f.path];
+    if (!p) changes.push({ type: "added", path: f.path, content: f.content });
+    else if (f.content !== p.content) changes.push({ type: "changed", path: f.path, before: p.content, after: f.content });
   }
-  for (const [path, pd] of Object.entries(pulled)) {
-    if (!localByPath.has(path)) changes.push({ type: "removed", path, before: pd.content });
+  for (const [path, p] of Object.entries(pulledMap)) {
+    if (!localMap.has(path)) changes.push({ type: "removed", path, before: p.content });
   }
   return changes;
 }
 
-function buildLineDiff(before = "", after = "") {
-  const bl = before.split("\n"), al = after.split("\n");
-  const out = [];
-  let pi = 0, ci = 0;
-  while (pi < bl.length && ci < al.length) {
-    if (bl[pi] === al[ci]) { if (bl[pi] !== "") out.push(` ${bl[pi]}`); pi++; ci++; continue; }
-    const np = bl.slice(pi + 1).indexOf(al[ci]), nc = al.slice(ci + 1).indexOf(bl[pi]);
-    if (np !== -1 && (nc === -1 || np <= nc)) {
-      for (let i = 0; i <= np; i++) { if (bl[pi + i] !== "") out.push(`-${bl[pi + i]}`); }
-      pi += np + 1; if (bl[pi] !== "") out.push(` ${bl[pi]}`); pi++; ci++;
-    } else if (nc !== -1) {
-      for (let i = 0; i <= nc; i++) { if (al[ci + i] !== "") out.push(`+${al[ci + i]}`); }
-      ci += nc + 1; if (al[ci] !== "") out.push(` ${al[ci]}`); ci++; pi++;
-    } else {
-      if (bl[pi] !== "") out.push(`-${bl[pi]}`); if (al[ci] !== "") out.push(`+${al[ci]}`); pi++; ci++;
-    }
-  }
-  while (pi < bl.length) { if (bl[pi] !== "") out.push(`-${bl[pi]}`); pi++; }
-  while (ci < al.length) { if (al[ci] !== "") out.push(`+${al[ci]}`); ci++; }
-  return out.join("\n");
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString("en", { month: "short", day: "numeric" });
 }
 
-async function commandAuth() {
-  const root = findWorkspaceRoot() || process.cwd();
-  const branchDir = join(root, branchDirectoryName);
-  const configPath = join(branchDir, configFileName);
+async function cmdInit() {
+  const root = process.cwd();
+  const cfgPath = join(root, branchDir, configFile);
 
-  if (!existsSync(configPath)) {
-    await commandInit();
+  if (existsSync(cfgPath)) {
+    console.log(`${GRAY}Workspace already initialized.${R}`);
+    return;
   }
 
-  const config = readConfig(root);
-  const port = 9876;
+  ensureDir(join(root, branchDir));
+  writeCfg(root, { userId: null, workspaceSlug: process.env.BRANCH_WORKSPACE || null, workspaceId: null, pulledState: {} });
+  ok("Workspace initialized.");
+  console.log(`  ${GRAY}Run ${B}branch login${R}${GRAY} to authenticate.${R}`);
+}
 
-  console.log("Opening browser for authentication...");
+async function cmdLogin() {
+  const root = findRoot() || process.cwd();
+  const cfgPath = join(root, branchDir, configFile);
+
+  if (!existsSync(cfgPath)) {
+    ensureDir(join(root, branchDir));
+    writeCfg(root, { userId: null, workspaceSlug: process.env.BRANCH_WORKSPACE || null, workspaceId: null, pulledState: {} });
+  }
+
+  const cfg = readCfg(root);
+  const port = 1024 + (Math.abs(randomBytes(2).readUInt16BE(0)) % 64000);
+
+  console.log(`${CYAN}${B}Opening browser to authenticate...${R}`);
+  console.log(`${GRAY}  ${API}/auth/cli?port=${port}${R}\n`);
 
   return new Promise((resolve) => {
-    const server = createServer(async (req, res) => {
+    const server = createServer((req, res) => {
       const url = new URL(req.url || "/", `http://localhost:${port}`);
       const userId = url.searchParams.get("userId");
 
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(`<!DOCTYPE html><html><body style="font-family:system-ui;text-align:center;padding:40px"><h2>Branch CLI</h2><p>${userId ? "Authenticated. You can close this window." : "Authentication failed."}</p></body></html>`);
-
       if (userId) {
-        config.userId = userId;
-        config.workspaceSlug = config.workspaceSlug || process.env.BRANCH_WORKSPACE || "";
-        writeConfig(root, config);
-        console.log(`Authenticated as ${userId}`);
-      } else {
-        console.log("Authentication failed. Make sure you are signed in on the web app.");
+        cfg.userId = userId;
+        writeCfg(root, cfg);
+        ok(`Logged in as ${userId}`);
+        if (!cfg.workspaceSlug && !process.env.BRANCH_WORKSPACE) {
+          console.log(`  ${GRAY}Set workspace: ${B}branch workspace <slug>${R}`);
+        }
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end("<!DOCTYPE html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Branch CLI</h2><p>Authenticated. You can close this window.</p></body></html>");
+        server.close();
+        setTimeout(() => process.exit(0), 100);
+        return;
       }
 
-      server.close();
-      resolve();
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("ok");
     });
 
+    server.on("error", (e) => die(`Port ${port} in use: ${e.message}`));
+
     server.listen(port, () => {
-      const authUrl = `${DEFAULT_API_URL}/auth/cli?port=${port}`;
-      try {
-        execSync(`open "${authUrl}"`);
-      } catch {
-        console.log(`Please open: ${authUrl}`);
-      }
+      try { execSync(`open "${API}/auth/cli?port=${port}"`); }
+      catch { console.log(`  ${GRAY}Open: ${API}/auth/cli?port=${port}${R}`); }
     });
   });
 }
 
-async function commandInit() {
-  const root = findWorkspaceRoot() || process.cwd();
-  const branchDir = join(root, branchDirectoryName);
-  const configPath = join(branchDir, configFileName);
+async function cmdWhoami() {
+  const { cfg } = reqCfg();
+  const uid = cfg.userId;
+  if (!uid) die("Not logged in. Run ${B}branch login${R}.");
 
-  if (existsSync(configPath)) {
-    console.log("Branch workspace already initialized.");
+  try {
+    const data = await api(cfg, "/api/me");
+    console.log(`${CYAN}${B}Branch CLI${R}`);
+    key("User ID", uid);
+    key("Workspace", cfg.workspaceSlug || cfg.workspaceId || "(not set)");
+    key("API", API);
+  } catch {
+    warn("Could not reach server. Token may be valid.");
+    key("User ID", uid);
+  }
+}
+
+async function cmdWorkspace(args) {
+  const { root, cfg } = reqCfg();
+
+  if (args[0] === "list") {
+    spin("Fetching workspaces...");
+    try {
+      const data = await api(cfg, "/api/workspaces");
+      spinDone();
+      if (data.length === 0) {
+        warn("No workspaces found. Create one in the web app.");
+        return;
+      }
+      for (const ws of data) {
+        const active = ws.slug === cfg.workspaceSlug || ws.id === cfg.workspaceId;
+        const marker = active ? `${GREEN}●${R}` : " ";
+        console.log(`  ${marker} ${B}${ws.name}${R}  ${GRAY}${ws.slug}${R}`);
+      }
+      console.log(`\n  ${GRAY}${B}branch workspace <slug>${R}${GRAY} to select one.${R}`);
+    } catch (e) {
+      spinDone();
+      warn(`Could not fetch workspaces: ${e.message}`);
+    }
     return;
   }
 
-  ensureDirectory(branchDir);
-  writeConfig(root, { userId: null, workspaceSlug: process.env.BRANCH_WORKSPACE || null, workspaceId: null, pulledState: {} });
-  console.log("Initialized Branch workspace.");
-  console.log("Run `branch auth` to authenticate.");
+  const slug = args[0];
+
+  if (!slug) {
+    key("Workspace", cfg.workspaceSlug || cfg.workspaceId || "(not set)");
+    console.log(`  ${GRAY}${B}branch workspace list${R}${GRAY}  — see all workspaces${R}`);
+    console.log(`  ${GRAY}${B}branch workspace <slug>${R}  — select one${R}`);
+    return;
+  }
+
+  cfg.workspaceSlug = slug;
+  cfg.workspaceId = null;
+  cfg.pulledState = {};
+  writeCfg(root, cfg);
+  ok(`Workspace set to "${slug}"`);
+  console.log(`  ${GRAY}Run ${B}branch pull${R}${GRAY} to download documents.${R}`);
 }
 
-async function commandPull() {
-  const { root, config } = requireConfig();
-  const workspaceId = config.workspaceId || config.workspaceSlug || process.env.BRANCH_WORKSPACE;
-  if (!workspaceId) fail("No workspace configured. Set BRANCH_WORKSPACE or add slug to config.");
+async function cmdPull() {
+  const { root, cfg } = reqCfg();
+  const wsId = cfg.workspaceId || cfg.workspaceSlug || process.env.BRANCH_WORKSPACE;
+  if (!wsId) die("No workspace. Run ${B}branch workspace <slug>${R}");
 
-  const data = await apiFetch(config, `/api/workspaces/${workspaceId}/pull`);
-  const pulledState = {};
+  spin(`Pulling from ${wsId}...`);
+  const data = await api(cfg, `/api/workspaces/${wsId}/pull`);
+  spinDone();
+
+  const pulled = {};
   for (const doc of data.documents) {
-    const target = join(root, doc.path);
-    ensureDirectory(dirname(target));
-    writeFileSync(target, doc.content);
-    pulledState[doc.path] = { versionId: doc.currentVersionId, versionNumber: doc.versionNumber, content: doc.content };
+    const fp = join(root, doc.path);
+    ensureDir(dirname(fp));
+    writeFileSync(fp, doc.content);
+    pulled[doc.path] = { versionId: doc.currentVersionId, versionNumber: doc.versionNumber, content: doc.content };
   }
-  config.pulledState = pulledState;
-  config.workspaceId = data.workspaceId;
-  writeConfig(root, config);
-  console.log(`Pulled ${data.documents.length} documents.`);
+
+  cfg.pulledState = pulled;
+  cfg.workspaceId = data.workspaceId;
+  writeCfg(root, cfg);
+
+  const n = data.documents.length;
+  ok(n === 0 ? "Workspace is empty." : `Pulled ${n} document${n !== 1 ? "s" : ""}.`);
 }
 
-async function commandStatus({ json = false } = {}) {
-  const { root, config } = requireConfig();
-  const changes = getLocalChanges(root, config.pulledState);
-  if (json) { console.log(JSON.stringify({ changes }, null, 2)); return; }
-  if (changes.length === 0) { console.log("No local changes."); return; }
-  for (const c of changes) console.log(`${c.type.padEnd(7)} ${c.path}`);
-}
+async function cmdStatus({ json } = {}) {
+  const { root, cfg } = reqCfg();
+  const changes = localChanges(root, cfg.pulledState);
 
-async function commandDiff({ json = false } = {}) {
-  const { root, config } = requireConfig();
-  const changes = getLocalChanges(root, config.pulledState);
-  if (json) { console.log(JSON.stringify({ changes }, null, 2)); return; }
-  if (changes.length === 0) { console.log("No local changes."); return; }
+  if (json) { console.log(JSON.stringify({ workspace: cfg.workspaceSlug, changes }, null, 2)); return; }
+  if (changes.length === 0) { ok("No local changes."); return; }
+
   for (const c of changes) {
-    console.log(`\n--- ${c.path}\n+++ ${c.path}`);
-    if (c.type === "added") console.log(buildLineDiff("", c.content));
-    else if (c.type === "removed") console.log(buildLineDiff(c.before, ""));
-    else console.log(buildLineDiff(c.before, c.after));
+    const icon = c.type === "added" ? `${GREEN}A${R}` : c.type === "removed" ? `${RED}D${R}` : `${YELLOW}M${R}`;
+    console.log(`  ${icon}  ${c.path}`);
+  }
+  console.log(`\n${GRAY}  ${changes.length} change${changes.length !== 1 ? "s" : ""}. ${B}branch diff${R}${GRAY} to review, ${B}branch push${R}${GRAY} to save.${R}`);
+}
+
+async function cmdDiff({ json } = {}) {
+  const { root, cfg } = reqCfg();
+  const changes = localChanges(root, cfg.pulledState);
+
+  if (json) { console.log(JSON.stringify({ changes }, null, 2)); return; }
+  if (changes.length === 0) { ok("No local changes."); return; }
+
+  for (const c of changes) {
+    console.log(`\n${B}${c.path}${R}`);
+    const bl = (c.before || "").split("\n");
+    const al = (c.after || c.content || "").split("\n");
+
+    let pi = 0, ci = 0;
+    while (pi < bl.length || ci < al.length) {
+      if (pi < bl.length && ci < al.length && bl[pi] === al[ci]) {
+        console.log(` ${GRAY}${bl[pi]}${R}`);
+        pi++; ci++;
+        continue;
+      }
+      const np = ci < al.length ? bl.slice(pi + 1).indexOf(al[ci]) : -1;
+      const nc = pi < bl.length ? al.slice(ci + 1).indexOf(bl[pi]) : -1;
+      if (np !== -1 && (nc === -1 || np <= nc)) {
+        for (let i = 0; i <= np; i++) { if (bl[pi + i]) console.log(`${RED}-${bl[pi + i]}${R}`); }
+        pi += np + 1;
+        if (bl[pi]) { console.log(` ${GRAY}${bl[pi]}${R}`); pi++; ci++; }
+      } else if (nc !== -1) {
+        for (let i = 0; i <= nc; i++) { if (al[ci + i]) console.log(`${GREEN}+${al[ci + i]}${R}`); }
+        ci += nc + 1;
+        if (al[ci]) { console.log(` ${GRAY}${al[ci]}${R}`); ci++; pi++; }
+      } else {
+        if (pi < bl.length && bl[pi]) console.log(`${RED}-${bl[pi]}${R}`);
+        if (ci < al.length && al[ci]) console.log(`${GREEN}+${al[ci]}${R}`);
+        pi++; ci++;
+      }
+    }
   }
 }
 
-async function commandPush({ author = "Human", summary = "Updated documents." } = {}) {
-  const { root, config } = requireConfig();
-  const workspaceId = config.workspaceId || config.workspaceSlug || process.env.BRANCH_WORKSPACE;
-  if (!workspaceId) fail("No workspace configured.");
+async function cmdPush({ message, author } = {}) {
+  const { root, cfg } = reqCfg();
+  const wsId = cfg.workspaceId || cfg.workspaceSlug || process.env.BRANCH_WORKSPACE;
+  if (!wsId) die("No workspace. Run ${B}branch workspace <slug>${R}");
 
-  const changes = getLocalChanges(root, config.pulledState);
-  if (changes.length === 0) { console.log("No local changes to push."); return; }
+  const changes = localChanges(root, cfg.pulledState);
+  if (changes.length === 0) { ok("No local changes to push."); return; }
 
-  for (const change of changes) {
-    const ep = encodeURIComponent(change.path);
-    if (change.type === "removed") {
-      await apiFetch(config, `/api/workspaces/${workspaceId}/documents/${ep}`, { method: "DELETE", body: JSON.stringify({ summary }) });
+  const authorType = (author || "Human").toLowerCase() === "human" ? "Human" : "AI";
+  const msg = message || `Updated ${changes.length} document${changes.length !== 1 ? "s" : ""}`;
+
+  for (const c of changes) {
+    const ep = encodeURIComponent(c.path);
+    if (c.type === "removed") {
+      await api(cfg, `/api/workspaces/${wsId}/documents/${ep}`, { method: "DELETE", body: JSON.stringify({ summary: msg }) });
       continue;
     }
-    if (config.pulledState?.[change.path]) {
-      await apiFetch(config, `/api/workspaces/${workspaceId}/documents/${ep}`, { method: "PUT", body: JSON.stringify({ content: change.after || change.content, summary, authorType: author.toLowerCase() === "human" ? "Human" : "AI" }) });
+    const exists = cfg.pulledState?.[c.path];
+    if (exists) {
+      await api(cfg, `/api/workspaces/${wsId}/documents/${ep}`, { method: "PUT", body: JSON.stringify({ content: c.after || c.content, summary: msg, authorType }) });
     } else {
-      await apiFetch(config, `/api/workspaces/${workspaceId}/documents`, { method: "POST", body: JSON.stringify({ path: change.path, content: change.content, summary }) });
+      await api(cfg, `/api/workspaces/${wsId}/documents`, { method: "POST", body: JSON.stringify({ path: c.path, content: c.content, summary: msg }) });
     }
   }
-  console.log(`Pushed ${changes.length} change${changes.length === 1 ? "" : "s"}.`);
-  console.log(`Author: ${author}`);
-  console.log(`Summary: ${summary}`);
-  console.log("Run `branch pull` to update local state.");
+
+  ok(`Pushed ${changes.length} change${changes.length !== 1 ? "s" : ""}.`);
+  if (author) key("Author", author);
+  key("Summary", msg);
+  console.log(`  ${GRAY}Run ${B}branch pull${R}${GRAY} to sync local state.${R}`);
 }
 
-async function commandHistory({ json = false } = {}) {
-  const { root, config } = requireConfig();
-  const workspaceId = config.workspaceId || config.workspaceSlug || process.env.BRANCH_WORKSPACE;
-  if (!workspaceId) fail("No workspace configured.");
+async function cmdLog({ file, json, oneline } = {}) {
+  const { cfg } = reqCfg();
+  const wsId = cfg.workspaceId || cfg.workspaceSlug || process.env.BRANCH_WORKSPACE;
+  if (!wsId) die("No workspace. Run ${B}branch workspace <slug>${R}");
 
-  const allPaths = Object.keys(config.pulledState || {});
+  spin("Loading history...");
+  const allPaths = Object.keys(cfg.pulledState || {});
+  const paths = file ? [file] : allPaths;
+
   const versions = [];
-  for (const path of allPaths) {
+  for (const p of paths) {
     try {
-      const res = await fetch(`${DEFAULT_API_URL}/api/workspaces/${workspaceId}/documents/${encodeURIComponent(path)}/versions`, { headers: { Authorization: getAuth(config) } });
-      if (!res.ok) continue;
-      const data = await res.json();
-      for (const v of data) versions.push({ path, ...v });
+      const data = await fetch(`${API}/api/workspaces/${wsId}/documents/${encodeURIComponent(p)}/versions`, { headers: { Authorization: authHeader(cfg) } });
+      if (!data.ok) continue;
+      const arr = await data.json();
+      for (const v of arr) versions.push({ path: p, ...v });
     } catch { continue; }
   }
+  spinDone();
+
   versions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
   if (json) { console.log(JSON.stringify({ versions }, null, 2)); return; }
-  if (versions.length === 0) { console.log("No versions yet."); return; }
-  for (const v of versions) {
-    console.log(`v${v.versionNumber} ${v.path}\n  ${v.summary}\n  Author: ${v.authorName} | ${new Date(v.createdAt).toLocaleString()}\n`);
+  if (versions.length === 0) { ok("No versions yet."); return; }
+
+  if (oneline) {
+    for (const v of versions.slice(0, 20)) {
+      const n = `${GREEN}v${String(v.versionNumber).padEnd(3)}${R}`;
+      const p = `  ${GRAY}${v.path}${R}`;
+      const s = `  ${v.summary}`;
+      const a = `  ${D}${v.authorName}${R}`;
+      const t = `  ${GRAY}${timeAgo(v.createdAt)}${R}`;
+      console.log(`${n}${s}${a}${t}`);
+    }
+    return;
+  }
+
+  for (const v of versions.slice(0, 20)) {
+    console.log(`\n${B}${GREEN}v${v.versionNumber}${R}  ${GRAY}${v.path}${R}`);
+    console.log(`  ${v.summary}`);
+    key("Author", `${v.authorName} (${v.authorType})`);
+    key("When", timeAgo(v.createdAt));
   }
 }
 
-async function commandHelp() {
-  console.log(`Branch CLI\n\nCommands:\n  branch auth               Sign in via browser\n  branch init               Initialize workspace\n  branch pull               Download documents\n  branch status [--json]    Show local changes\n  branch diff [--json]      Show detailed diffs\n  branch push [--author X] [--summary "msg"]  Upload changes\n  branch history [--json]   View version history\n\nSetup:\n  BRANCH_WORKSPACE=r        Workspace slug\n  BRANCH_API_URL=...         Custom API URL (default: deployed app)\n`);
+async function cmdOpen(args) {
+  const { cfg } = reqCfg();
+  const ws = cfg.workspaceSlug || cfg.workspaceId;
+  if (!ws) die("No workspace configured.");
+
+  const file = args[0] || "";
+  const url = `${API}/${file ? `?doc=${encodeURIComponent(file)}` : ""}`;
+  try { execSync(`open "${url}"`); }
+  catch { console.log(`Open: ${url}`); }
+}
+
+async function cmdHelp() {
+  console.log(`
+${B}${CYAN}Branch CLI${R}  ${GRAY}— Git for documents. Built for humans and AI.${R}
+
+${B}Commands${R}
+
+  ${B}branch login${R}              Authenticate via browser
+  ${B}branch whoami${R}             Show current user and workspace
+  ${B}branch workspace [slug]${R}   Set or view workspace
+  ${B}branch pull${R}               Download documents from cloud
+  ${B}branch status${R}             Show local changes
+  ${B}branch diff${R}               Show detailed line-by-line diffs
+  ${B}branch push${R}               Upload local changes to cloud
+  ${B}branch log [file]${R}         Show version history
+  ${B}branch open [file]${R}        Open workspace in browser
+
+${B}Flags${R}
+
+  ${B}--message, -m${R}     Commit summary
+  ${B}--author, -a${R}      Author name (Human, Claude, etc.)
+  ${B}--json${R}            Machine-readable output
+  ${B}--oneline${R}         Compact log format
+
+${B}Examples${R}
+
+  ${GRAY}$ ${R}branch login
+  ${GRAY}$ ${R}branch workspace ronak
+  ${GRAY}$ ${R}branch pull
+  ${GRAY}$ ${R}branch push -m "Updated MVP spec" -a Claude
+  ${GRAY}$ ${R}branch log --oneline
+  ${GRAY}$ ${R}branch diff --json
+
+${B}Setup${R}
+
+  export BRANCH_WORKSPACE=my-workspace
+  export BRANCH_API_URL=https://web-iota-ruby-62.vercel.app
+`);
 }
 
 async function main() {
-  const [, , command = "help", ...args] = process.argv;
+  const [, , cmd, ...args] = process.argv;
   const flags = parseFlags(args);
-  switch (command) {
-    case "auth": await commandAuth(); break;
-    case "init": await commandInit(); break;
-    case "pull": await commandPull(); break;
-    case "status": await commandStatus({ json: Boolean(flags.json) }); break;
-    case "diff": await commandDiff({ json: Boolean(flags.json) }); break;
-    case "push": await commandPush({ author: typeof flags.author === "string" ? flags.author : "Human", summary: typeof flags.summary === "string" ? flags.summary : "Updated documents." }); break;
-    case "history": await commandHistory({ json: Boolean(flags.json) }); break;
-    case "help": case "--help": case "-h": await commandHelp(); break;
-    default: fail(`Unknown command: ${command}`);
+
+  switch (cmd) {
+    case undefined:
+    case "status":
+      await cmdStatus({ json: Boolean(flags.json) });
+      break;
+    case "init":
+      await cmdInit();
+      break;
+    case "login":
+      await cmdLogin();
+      break;
+    case "whoami":
+      await cmdWhoami();
+      break;
+    case "workspace":
+      await cmdWorkspace(args.filter(a => !a.startsWith("-")));
+      break;
+    case "pull":
+      await cmdPull();
+      break;
+    case "diff":
+      await cmdDiff({ json: Boolean(flags.json) });
+      break;
+    case "push":
+      await cmdPush({ message: flags.m || flags.message, author: flags.a || flags.author });
+      break;
+    case "log":
+    case "history":
+      await cmdLog({ file: flags.file || args[0], json: Boolean(flags.json), oneline: Boolean(flags.oneline) });
+      break;
+    case "open":
+      await cmdOpen(args);
+      break;
+    case "help":
+    case "--help":
+    case "-h":
+      await cmdHelp();
+      break;
+    default:
+      console.log(`${RED}Unknown command: ${cmd}${R}`);
+      console.log(`${GRAY}Run ${B}branch help${R}${GRAY} for usage.${R}`);
+      process.exit(1);
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().catch((error) => fail(error.message));
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => die(e.message));
 }

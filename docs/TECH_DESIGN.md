@@ -3,30 +3,36 @@
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                       Browser                           │
-│  Next.js 16 · React 19 · Tailwind · ClerkProvider       │
-└────────────┬────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Claude Desktop / AI                       │
+│                  (MCP Server via stdio)                      │
+└────────────────────┬────────────────────────────────────────┘
+                     │ MCP tools (list, get, create, update)
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       Browser                               │
+│  Next.js 16 · React 19 · Tailwind · ClerkProvider           │
+└────────────┬────────────────────────────────────────────────┘
              │ Clerk session cookie
              ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Vercel (Serverless)                    │
-│                                                         │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ proxy.ts │  │  API Routes  │  │  Auth Helpers    │  │
-│  │ (Clerk)  │  │  (7 routes)  │  │  resolveUserId() │  │
-│  └──────────┘  └──────┬───────┘  └──────────────────┘  │
-│                       │                                  │
-│              ┌────────▼────────┐                        │
-│              │   db-helpers    │                        │
-│              │  (abstraction)  │                        │
-│              └───┬─────────┬───┘                        │
-│                  │         │                             │
-│         ┌────────▼──┐  ┌──▼───────────┐                │
-│         │  Drizzle   │  │  git-engine  │                │
-│         │  ORM       │  │  GitHub API  │                │
-│         └─────┬──────┘  └──────┬───────┘                │
-└───────────────┼────────────────┼────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Vercel (Serverless)                        │
+│                                                             │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ proxy.ts │  │  API Routes  │  │  Auth Helpers         │  │
+│  │ (Clerk)  │  │  (8 routes)  │  │  resolveUserId()      │  │
+│  └──────────┘  └──────┬───────┘  └──────────────────────┘  │
+│                       │                                      │
+│              ┌────────▼────────┐                            │
+│              │   db-helpers    │                            │
+│              │  (abstraction)  │                            │
+│              └───┬─────────┬───┘                            │
+│                  │         │                                 │
+│         ┌────────▼──┐  ┌──▼───────────┐                    │
+│         │  Drizzle   │  │  git-engine  │                    │
+│         │  ORM       │  │  GitHub API  │                    │
+│         └─────┬──────┘  └──────┬───────┘                    │
+└───────────────┼────────────────┼────────────────────────────┘
                 │                │
                 ▼                ▼
         ┌──────────────┐  ┌──────────────┐
@@ -35,10 +41,17 @@
         │ users         │  │              │
         │ workspaces    │  │ branch-<id>  │
         │ documents     │  │ repos        │
-        │ commit_       │  │              │
-        │ annotations   │  │ markdown     │
-        └──────────────┘  │ files        │
+        └──────────────┘  │              │
+                          │ markdown     │
+                          │ files        │
                           └──────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                          CLI                                 │
+│  Node.js · zero deps · npm: getbranch                       │
+│  branch login → browser Clerk auth → saves userId           │
+│  branch pull / push / status / diff / log                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
@@ -46,11 +59,12 @@
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | Frontend | Next.js 16, React 19, Tailwind CSS | Server components, fast builds, utility CSS |
-| Auth | Clerk | Free tier, prebuilt UI, middleware, API token support |
+| Auth | Clerk | Free tier, prebuilt UI, middleware, browser-based CLI auth |
 | Database | Neon Postgres + Drizzle ORM | Serverless Postgres, type-safe queries, free tier |
 | Git Backend | GitHub API (Contents API) | Real Git, free private repos, zero infrastructure |
 | Hosting | Vercel | Next.js native, free tier, edge functions |
-| CLI | Node.js, zero deps | Single file, `npm i -g getbranch`, browser-based auth |
+| CLI | Node.js, zero deps | Single file, `npm i -g getbranch`, colored output |
+| MCP Server | MCP SDK + Zod | Claude-native document access via stdio |
 | Markdown | react-markdown + remark-gfm | GFM support, extensible |
 | Logging | In-memory ring buffer | No external service, `/api/logs` endpoint |
 
@@ -68,9 +82,9 @@ users
   created_at, updated_at: timestamp
 
 workspaces
-  id: text (PK, UUID)
+  id: text (PK)
   name: text
-  slug: text (unique, URL-safe)
+  slug: text (unique)
   owner_id: text → users.id
   created_at, updated_at: timestamp
 
@@ -81,28 +95,22 @@ workspace_members
 documents
   id: text (PK)
   workspace_id: text → workspaces.id
-  path: text (e.g. "startup/plan.md")
+  path: text
   title: text
   current_version_id: text (GitHub commit SHA)
   deleted_at: timestamp
   created_at, updated_at: timestamp
-  INDEX (workspace_id, path)
 ```
 
 ### GitHub (content + history)
 
-Each workspace → one private GitHub repo under `ronaksakhuja`.
+One private repo per workspace under `ronaksakhuja`:
 
 ```
 ronaksakhuja/branch-<uuid>/
-  ├── startup/
-  │   ├── plan.md
-  │   └── specs/
-  │       └── mvp.md
-  ├── finance/
-  │   └── retirement.md
-  └── personal/
-      └── japan-trip.md
+  ├── startup/plan.md
+  ├── finance/retirement.md
+  └── personal/notes.md
 ```
 
 Git commit messages use structured trailers:
@@ -119,153 +127,140 @@ Branch-Author-Name: Claude
 ## Auth Flow
 
 ### Web
-
-```
-Browser → ClerkProvider → clerkMiddleware (proxy.ts)
-                              │
-                    Clerk session cookie
-                              │
-                    API route → auth() → userId
-                              │
-                    ensureUser() → sync to Postgres
-```
+Browser → ClerkProvider → proxy.ts (clerkMiddleware) → Clerk session cookie → API auth()
 
 ### CLI
-
 ```
-Terminal → branch auth
-               │
-               ▼
-      Start local HTTP server on :9876
-               │
-               ▼
-      Open browser → web-iota-ruby-62.vercel.app/auth/cli?port=9876
-               │
-               ▼
-      Clerk session detected → redirect to localhost:9876?userId=user_xxx
-               │
-               ▼
-      Save userId to .branch/config.json
-               │
-               ▼
-      All CLI API calls: Authorization: Bearer <userId>.cli
+branch login
+  → start HTTP server on random port
+  → open browser → /auth/cli?port=XXXX
+  → Clerk session detected → redirect to localhost:XXXX?userId=xxx
+  → save userId to .branch/config.json
+  → API calls: Authorization: Bearer <userId>.cli
+```
+
+### MCP Server
+```
+Claude Desktop → stdio → branch-mcp process
+  → reads BRANCH_USER_ID, BRANCH_WORKSPACE from env
+  → API calls: Authorization: Bearer <userId>.cli
 ```
 
 ---
 
 ## API Design
 
-All routes are `force-dynamic`. Auth via `resolveUserId()` (checks Clerk session + Bearer token).
+All routes are `force-dynamic`. Auth via `resolveUserId()` (Clerk session + Bearer token).
 
-### Routes
-
-| Method | Path | Auth | Operation |
-|--------|------|------|-----------|
-| GET | `/api/workspaces` | ✓ | List user's workspaces |
-| POST | `/api/workspaces` | ✓ | Create workspace + GitHub repo |
-| GET | `/api/workspaces/:id/documents` | ✓ | List documents in workspace |
-| POST | `/api/workspaces/:id/documents` | ✓ | Create document (GitHub commit) |
-| GET | `/api/workspaces/:id/documents/:path` | ✓ | Get document + versions |
-| PUT | `/api/workspaces/:id/documents/:path` | ✓ | Update document (GitHub commit) |
-| DELETE | `/api/workspaces/:id/documents/:path` | ✓ | Delete document (GitHub commit) |
-| GET | `/api/workspaces/:id/documents/:path/versions` | ✓ | Version history (from GitHub) |
-| GET | `/api/workspaces/:id/documents/:path/diff` | ✓ | Diff two versions |
-| GET | `/api/workspaces/:id/pull` | ✓ | Pull all documents (CLI) |
-| GET | `/api/logs` | ✓ | View API logs |
-| GET | `/api/me` | ✓ | Current user info |
-| GET | `/auth/cli` | Public | CLI browser auth page |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/POST | `/api/workspaces` | List/create workspaces |
+| GET/POST | `/api/workspaces/:id/documents` | List/create documents |
+| GET/PUT/DELETE | `/api/workspaces/:id/documents/:path` | Get/update/delete document |
+| GET | `/api/workspaces/:id/documents/:path/versions` | Version history |
+| GET | `/api/workspaces/:id/documents/:path/diff` | Diff two versions |
+| GET | `/api/workspaces/:id/pull` | Pull all documents (CLI) |
+| GET | `/api/logs` | View API logs |
+| GET | `/api/me` | Current user info |
+| GET | `/auth/cli` | CLI browser auth page (public) |
 
 ### Route Handler Pattern
 
 ```ts
 export const GET = wrapHandler(async (req, { userId }) => {
-  // Business logic
   return NextResponse.json(data);
 });
 ```
 
-`wrapHandler` handles:
-- Auth resolution (`resolveUserId`)
-- User sync (`ensureUser`)
-- Error catching (returns `{ error }` with correct status)
-- Logging (`log()` with timing)
-
-### Slug → ID Resolution
-
-Workspace URLs use slugs for readability but DB uses UUIDs. `resolveWorkspaceId()` transparently resolves:
-
-```ts
-// /api/workspaces/ronak/documents → workspace_abc123
-const workspaceId = await resolveWorkspaceId("ronak");
-```
+`wrapHandler` handles auth, user sync, error catching, and logging with timing.
 
 ---
 
 ## Git Engine
 
-### GitHub API Operations
+GitHub Contents API used as the document storage layer:
 
 ```
 commitDocument() → PUT /repos/{owner}/{repo}/contents/{path}
-                   Content: base64 encoded
-                   Committer/author: from Clerk user
-                   SHA from existing file for updates
-
 readDocument()  → GET /repos/{owner}/{repo}/contents/{path}
-                   Accept: application/vnd.github.raw+json
-                   404 → null (file not found)
-
 listFiles()     → GET /repos/{owner}/{repo}/git/trees/main?recursive=1
-                   Filter: type=blob, endsWith(.md)
-
-getLog()        → GET /repos/{owner}/{repo}/commits?path={path}
-
+getLog()        → GET /repos/{owner}/{repo}/commits
 deleteDocument() → DELETE /repos/{owner}/{repo}/contents/{path}
-                   Requires SHA from existing file
 ```
 
-### Repo Naming
+All operations map to real Git commits. Repos are created lazily on first use. Each workspace → one private GitHub repo.
 
-```
-workspace UUID → branch-<uuid>
-  workspace_abc123 → ronaksakhuja/branch-workspace-abc123
-```
+### Migration Path
 
-### Lazy Initialization
-
-All operations call `ensureRepo()` first. If the repo doesn't exist, it's created:
-
-```ts
-async function ensureRepo(workspaceId: string) {
-  const exists = await fetch(`/repos/${owner}/${repoName(workspaceId)}`);
-  if (!exists.ok) await initWorkspaceRepo(workspaceId);
-}
-```
-
-Existing workspaces get their repo on first document operation.
+When rate limits or latency become issues, migrate to a dedicated Railway Git server by exporting GitHub repos and updating `git-engine.ts`. No API or UI changes needed.
 
 ---
 
 ## CLI Design
 
-Single file, zero dependencies, published as `getbranch` on npm.
+Single 13KB file, zero dependencies, published as `getbranch` on npm.
+
+### Commands
 
 ```
-branch auth       → Local HTTP server + browser redirect → saves userId
-branch init       → Creates .branch/config.json
-branch pull       → GET /api/workspaces/:id/pull → writes files to disk
-branch status     → Local file comparison against pulled state
-branch diff       → Local line-by-line diff
-branch push       → PUT/POST/DELETE per changed file
-branch history    → GET versions endpoint per document
+branch login              Authenticate via browser → Clerk session
+branch whoami             Show current user and workspace
+branch workspace list     List all workspaces
+branch workspace <slug>   Set active workspace
+branch pull               Download documents from cloud
+branch status             Show local changes (A/M/D with colors)
+branch diff               Line-by-line diffs with colors
+branch push               Upload local changes to cloud
+branch log [--oneline]    Version history
+branch open               Open workspace in browser
 ```
+
+### Flags
+
+`--message/-m`, `--author/-a`, `--json`, `--oneline`
 
 ### Config
 
 ```
-.branch/
-  config.json    → { userId, workspaceSlug, workspaceId, pulledState }
+.branch/config.json → { userId, workspaceSlug, workspaceId, pulledState }
 ```
+
+---
+
+## MCP Server
+
+Claude-native document collaboration via MCP stdio transport.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_documents` | List all documents in workspace |
+| `get_document` | Read full content of a document |
+| `view_history` | Version history with author/date |
+| `create_document` | Create a new markdown document |
+| `update_document` | Update existing document (AI-authored) |
+| `propose_document_update` | Read current content to suggest changes |
+
+### Claude Desktop Config
+
+```json
+{
+  "mcpServers": {
+    "branch": {
+      "command": "node",
+      "args": ["/path/to/branch/packages/mcp/src/index.js"],
+      "env": {
+        "BRANCH_USER_ID": "user_xxx",
+        "BRANCH_WORKSPACE": "personal-finance",
+        "BRANCH_API_URL": "https://web-iota-ruby-62.vercel.app"
+      }
+    }
+  }
+}
+```
+
+Place at `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS).
 
 ---
 
@@ -286,8 +281,13 @@ vercel --prod
 ### npm (CLI)
 
 ```bash
-cd packages/cli
-npm publish
+cd packages/cli && npm publish
+```
+
+### npm (MCP Server)
+
+```bash
+cd packages/mcp && npm publish
 ```
 
 ---
@@ -296,15 +296,14 @@ npm publish
 
 | Concern | Solution |
 |---------|----------|
-| Web auth | Clerk handles OAuth, sessions, brute force protection |
-| API auth | `resolveUserId()` checks Clerk session + Bearer token |
-| CLI auth | Browser-based Clerk session transfer, no passwords |
-| GitHub access | PAT stored as Vercel env var, never exposed to client |
-| Repos | All private, created via server-side PAT |
-| DB credentials | Neon connection string in Vercel env vars |
-| Secrets in git | `.gitignore` blocks `.env*`, verified before each push |
+| Web auth | Clerk handles sessions, brute force protection |
+| API auth | resolveUserId() checks Clerk + Bearer token |
+| CLI auth | Browser-based Clerk session transfer |
+| GitHub access | PAT stored as Vercel env var, never client-side |
+| Repos | All private, created server-side |
+| DB credentials | Neon connection string in Vercel env |
+| Secrets in git | .gitignore blocks .env*, verified before pushes |
 | SQL injection | Drizzle ORM parameterized queries |
-| Rate limiting | GitHub API: 5000/hr shared. Add Vercel rate limiting later |
 
 ---
 
@@ -312,30 +311,47 @@ npm publish
 
 | Decision | Rationale |
 |----------|----------|
-| GitHub API over isomorphic-git | Real Git, zero infrastructure, free. Migratable to Railway later. |
-| Clerk over Auth.js | Prebuilt UI, middleware, free tier generous for MVP |
+| GitHub API over isomorphic-git | Real Git, free, zero infra. Migratable to Railway. |
+| Clerk over Auth.js | Prebuilt UI, middleware, browser-based CLI auth |
 | Neon over Vercel Postgres | Not deprecated, same price, better DX |
-| Single branch-data repo over per-workspace | Simplifies initial deployment. Per-workspace model ready to scale. |
-| TypeScript in API, plain JS in CLI | API needs type safety. CLI benefits from zero build step. |
-| In-memory logger over external | No cost, sufficient for MVP debugging |
+| MCP over custom integration | Claude-native, stdio transport, zero setup |
+| TypeScript in API, JS in CLI/MCP | API needs type safety. CLI benefits from zero build. |
+| In-memory logger over external | Free, sufficient for MVP |
 
 ---
 
-## Migration Path
+## Project Structure
 
-### GitHub API → Railway Git Server
-
-When rate limits or latency become issues:
-
-1. `git clone --mirror` each GitHub repo
-2. Upload to Railway persistent volume
-3. Update `git-engine.ts` to point to Railway
-4. No UI, API, or CLI changes needed
-
-### Repo-per-workspace → Single-org repos
-
-If per-workspace repos become too many:
-
-1. Move all workspace folders into one repo
-2. Update `repoName()` logic in git-engine
-3. Migrate existing repos with `git subtree`
+```
+branch/
+├── docs/
+│   └── TECH_DESIGN.md
+├── wiki/
+│   ├── PRD.md
+│   ├── VISION.md
+│   └── BUILD_PLAN.md
+├── plans/
+│   ├── plan.md
+│   └── git-engine.md
+├── web/                    Next.js app
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx           Google Docs-style UI
+│   │   │   ├── layout.tsx         ClerkProvider
+│   │   │   ├── api/               API routes
+│   │   │   └── auth/cli/          CLI browser auth page
+│   │   ├── db/schema.ts           Drizzle schema
+│   │   ├── lib/
+│   │   │   ├── api.ts             Client helpers
+│   │   │   ├── api-logger.ts      Route wrapper
+│   │   │   ├── auth-helpers.ts    Clerk + token auth
+│   │   │   ├── db-helpers.ts      DB operations
+│   │   │   ├── git-engine.ts      GitHub API client
+│   │   │   └── logger.ts          In-memory logger
+│   │   └── proxy.ts              Clerk middleware
+│   └── drizzle.config.ts
+├── packages/
+│   ├── cli/                Published as getbranch
+│   └── mcp/                Published as branch-mcp
+└── README.md
+```

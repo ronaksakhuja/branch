@@ -109,3 +109,25 @@ export const gitRefs = pgTable(
     primaryKey({ columns: [table.workspaceId, table.ref] }),
   ],
 );
+
+export const shareLinks = pgTable(
+  "share_links",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    documentPath: text("document_path"),
+    token: text("token").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp("expires_at"),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("share_links_token_idx").on(table.token),
+    index("share_links_workspace_idx").on(table.workspaceId),
+  ],
+);

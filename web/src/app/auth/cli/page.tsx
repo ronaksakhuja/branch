@@ -6,46 +6,56 @@ import { useEffect, useState } from "react";
 
 export default function CliAuthPage() {
   const { user, isLoaded } = useUser();
-  const [status, setStatus] = useState("Connecting...");
+  const [status, setStatus] = useState("Connecting to Branch...");
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const port = searchParams.get("port") || "9876";
+    const sp = new URLSearchParams(window.location.search);
+    const port = sp.get("port") || "9876";
 
     if (!isLoaded) return;
 
     if (!user) {
-      queueMicrotask(() => setStatus("Not signed in. Please sign in on the Branch web app first."));
+      queueMicrotask(() => setStatus("Sign in to continue"));
       return;
     }
 
-    queueMicrotask(() => setStatus("Authenticated. Redirecting back to CLI..."));
+    queueMicrotask(() => setStatus(`Signed in as ${user.fullName || user.emailAddresses[0]?.emailAddress || "you"}. Sending back to CLI...`));
+
     const timer = setTimeout(() => {
       window.location.href = `http://localhost:${port}?userId=${encodeURIComponent(user.id)}`;
-    }, 800);
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [user, isLoaded]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f4efe5]">
-      <div className="rounded-[2rem] border border-[#d9cbb5] bg-[#fffdf8] p-10 text-center shadow-sm">
-        <h1 className="text-4xl font-semibold tracking-tight text-[#241f18]">Branch CLI Auth</h1>
-        <p className="mt-4 text-lg text-[#6f604d]">{status}</p>
+    <main className="flex min-h-screen items-center justify-center bg-[#f9f8f6]">
+      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+        <h1 className="text-xl font-semibold text-zinc-800">Branch CLI</h1>
+
+        <p className="mt-4 text-sm text-zinc-600">{status}</p>
+
         {!isLoaded && (
-          <div className="mt-6 h-2 w-48 mx-auto rounded-full bg-[#e2d5c1] overflow-hidden">
-            <div className="h-full w-2/3 animate-pulse rounded-full bg-[#241f18]" />
+          <div className="mt-5 h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+            <div className="h-full w-2/3 animate-pulse rounded-full bg-zinc-400" />
           </div>
         )}
+
         {isLoaded && !user && (
-          <div className="mt-6">
-            <Link
-              href="/"
-              className="inline-block rounded-xl bg-[#241f18] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#3f3426]"
-            >
-              Go to Branch
+          <div className="mt-5">
+            <Link href="/" className="inline-block rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-zinc-700">
+              Sign in to Branch
             </Link>
+            <p className="mt-3 text-xs text-zinc-400">
+              Then run <code className="rounded bg-zinc-100 px-1 font-mono">branch login</code> again.
+            </p>
           </div>
+        )}
+
+        {isLoaded && user && (
+          <p className="mt-3 text-xs text-zinc-400">
+            This page will redirect back to your terminal. You can close this tab after that.
+          </p>
         )}
       </div>
     </main>

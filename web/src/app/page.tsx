@@ -107,6 +107,12 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
   const [error, setError] = useState<string | null>(null);
   const [showVersions, setShowVersions] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [shareTab, setShareTab] = useState<"link" | "members">("link");
+  const [shareLinks, setShareLinks] = useState<{ token: string; documentPath: string | null; createdAt: string }[]>([]);
+  const [members, setMembers] = useState<{ userId: string; role: string; name: string | null; email: string | null }[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [newSharePath, setNewSharePath] = useState("");
   const loaded = useRef(false);
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
 
@@ -138,6 +144,51 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
     try { await createDocumentApi(workspaceId, path, `# ${name}\n\n`, "Created"); const metas = await fetchDocuments(workspaceId); setDocs(metas); setNewName(""); load(path); } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
 
+  async function loadShareData() {
+    try {
+      const [linksRes, membersRes] = await Promise.all([
+        fetch(`/api/workspaces/${workspaceId}/share`).then((r) => r.json()),
+        fetch(`/api/workspaces/${workspaceId}/members`).then((r) => r.json()),
+      ]);
+      setShareLinks(linksRes);
+      setMembers(membersRes);
+    } catch {}
+  }
+
+  async function createShareLink() {
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/share`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentPath: newSharePath || null }),
+      });
+      const data = await res.json();
+      setShareLinks((l) => [...l, { token: data.token, documentPath: newSharePath || null, createdAt: new Date().toISOString() }]);
+      setNewSharePath("");
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+  }
+
+  async function revokeShareLink(token: string) {
+    await fetch(`/api/workspaces/${workspaceId}/share?token=${token}`, { method: "DELETE" });
+    setShareLinks((l) => l.filter((s) => s.token !== token));
+  }
+
+  async function inviteMember() {
+    if (!inviteEmail.trim()) return;
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/members`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: "viewer" }),
+      });
+      setInviteEmail("");
+      loadShareData();
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+  }
+
+  async function removeMember(targetUserId: string) {
+    await fetch(`/api/workspaces/${workspaceId}/members?userId=${targetUserId}`, { method: "DELETE" });
+    loadShareData();
+  }
+
   return (
     <Shell>
       <TopBar
@@ -146,6 +197,7 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
             <select className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600 outline-none" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
               {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+            <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100">Share</button>
             <SignOutButton><button className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100">Sign out</button></SignOutButton>
           </div>
         }
@@ -252,6 +304,72 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
           <div className="flex items-center gap-2">
             <button onClick={() => setShowVersions(!showVersions)} className={`rounded-md px-3 py-1 text-xs font-medium transition ${showVersions ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100"}`}>Versions</button>
             <button onClick={() => { setMode("edit"); setDraft(doc.content); }} className="rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-zinc-700">Edit</button>
+          </div>
+        </div>
+      )}
+
+      {showShare && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setShowShare(false)}>
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex border-b border-zinc-100">
+              {(["link", "members"] as const).map((tab) => (
+                <button key={tab} onClick={() => setShareTab(tab)}
+                  className={`flex-1 px-4 py-2.5 text-sm font-medium capitalize transition ${shareTab === tab ? "border-b-2 border-zinc-900 text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}>
+                  {tab === "link" ? "Share Link" : "Collaborators"}
+                </button>
+              ))}
+              <button onClick={() => setShowShare(false)} className="px-4 py-2.5 text-sm text-zinc-400 hover:text-zinc-600">✕</button>
+            </div>
+
+            {shareTab === "link" && (
+              <div className="p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input className="flex-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500" placeholder="Document path (or leave empty for workspace)" value={newSharePath} onChange={(e) => setNewSharePath(e.target.value)} />
+                  <button onClick={createShareLink} className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700">Create</button>
+                </div>
+                {shareLinks.length === 0 ? (
+                  <p className="text-xs text-zinc-400 text-center py-3">No share links yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {shareLinks.map((link) => (
+                      <div key={link.token} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-zinc-700">{link.documentPath || "Entire workspace"}</p>
+                          <p className="font-mono text-[10px] text-zinc-400 truncate">{`/share/${link.token}`}</p>
+                        </div>
+                        <button onClick={() => revokeShareLink(link.token)} className="ml-2 rounded px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50">Revoke</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {shareTab === "members" && (
+              <div className="p-4 space-y-3">
+                <div className="flex gap-2">
+                  <input className="flex-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500" placeholder="Email address" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && inviteMember()} />
+                  <button onClick={inviteMember} className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700">Invite</button>
+                </div>
+                {members.length === 0 ? (
+                  <p className="text-xs text-zinc-400 text-center py-3">No collaborators yet</p>
+                ) : (
+                  <div className="space-y-1">
+                    {members.map((m) => (
+                      <div key={m.userId} className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium text-zinc-700">{m.name || m.email || m.userId}</p>
+                          <p className="text-[10px] text-zinc-400 uppercase">{m.role}</p>
+                        </div>
+                        {m.role !== "owner" && (
+                          <button onClick={() => removeMember(m.userId)} className="rounded px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50">Remove</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
