@@ -1,20 +1,15 @@
 import { getDb } from "@/db";
-import { documents, documentVersions, workspaces } from "@/db/schema";
-import { eq, and, desc, isNull, inArray, or } from "drizzle-orm";
+import { documents, workspaces } from "@/db/schema";
+import { eq, and, desc, isNull, or } from "drizzle-orm";
 import { id } from "./auth-helpers";
-import crypto from "node:crypto";
 import {
   initWorkspaceRepo,
   commitDocument,
   readDocument as gitReadDocument,
   listFiles as gitListFiles,
   getLog as gitGetLog,
-  getHeadSha,
+  deleteDocument as gitDeleteDocument,
 } from "./git-engine";
-
-export function hashContent(content: string) {
-  return crypto.createHash("sha256").update(content).digest("hex");
-}
 
 export function titleFromPath(path: string) {
   const filename = path.split("/").at(-1)?.replace(/\.md$/, "") || "Untitled";
@@ -85,7 +80,10 @@ export async function getDocument(workspaceId: string, path: string) {
     updatedAt: new Date(),
   };
 
-  const gitLog = await gitGetLog(workspaceId, path, 100).catch(() => [] as { oid: string; commit: { message: string; author: { name: string; timestamp: number } }; payload: string }[]);
+  type GitLogEntry = { oid: string; commit: { message: string; author: { name: string; timestamp: number } }; payload: string };
+  const gitLog = await gitGetLog(workspaceId, path, 100)
+    .then((log) => log as unknown as GitLogEntry[])
+    .catch((): GitLogEntry[] => []);
 
   const versions = gitLog.map((entry, index) => ({
     id: entry.oid,
