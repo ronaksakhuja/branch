@@ -19,37 +19,62 @@
 
 ## Next Sprint
 
-### 1. Author display names
+### 1. Git engine backend (P0)
+**Problem:** Current versioning is application-level in Postgres. We committed
+to Git as the canonical engine from day one. DB-level versioning is missing
+branches, merging, proper diffs, and ecosystem compatibility.
+**Fix:** Each workspace gets a bare Git repo on the server. Web edits create
+Git commits server-side. `branch pull` clones/pulls the repo. `branch push`
+commits and pushes to the Branch remote. Postgres stores workspace metadata,
+auth, and commit annotations — Git owns document content and history.
+
+**Architecture:**
+```
+server: /repos/workspace_123.git          (bare repo)
+CLI:    git clone → edit → git commit → git push origin main
+web:    checkout → edit file → git add → git commit → push to bare
+```
+
+**Steps:**
+- Add server-side bare repo management (create on workspace creation)
+- Update API routes to read/write via `git show`/`git commit` instead of DB
+- Server-side commits use `git -c user.name=... -c user.email=... commit`
+- `branch diff` uses `git diff` (already done locally)
+- `branch history` uses `git log` with structured trailers for AI metadata
+- DB stores `commit_sha` references, not full content
+- Migrate existing DB-stored versions into Git commits
+
+### 2. Author display names
 **Problem:** Documents show author as `user_3FMZ6T5QTnM5v7i4yKTkbkr1EEF` instead of
 actual names.
 **Fix:** Store author name from `--author` flag in CLI, display Clerk name for
 web edits. Add `author_name` param to createDocument/updateDocument.
 
-### 2. Delete documents from web UI
+### 3. Delete documents from web UI
 **Problem:** No way to delete a document from the browser.
 **Fix:** Add delete button in document view (with confirmation). Wire to
 `DELETE /api/workspaces/:id/documents/:path`.
 
-### 3. Mobile responsive
+### 4. Mobile responsive
 **Problem:** Three-panel layout breaks on phones.
 **Fix:** Stack panels vertically on small screens. Documents drawer becomes
 full-screen overlay. Bottom bar stays fixed.
 
-### 4. Document search
+### 5. Document search
 **Problem:** Can't search across documents in a workspace.
-**Fix:** Add search input to top bar. Query `documents` table with
-`ILIKE '%query%'` on content. Show results in documents panel.
+**Fix:** Add search input to top bar. With Git engine, use `git grep`. With
+DB, use `ILIKE` on content.
 
-### 5. Image support
+### 6. Image support
 **Problem:** Markdown images don't render.
-**Fix:** Allow image uploads when saving documents. Store images in Vercel
-Blob or S3. Render in markdown viewer.
+**Fix:** Allow image uploads when saving documents. Store images in the Git
+repo alongside markdown (or Vercel Blob). Render in markdown viewer.
 
 ---
 
 ## Medium Term
 
-### 6. MCP server
+### 7. MCP server
 **Problem:** AI tools (Claude, ChatGPT) can't access Branch documents
 programmatically.
 **Fix:** Build TypeScript MCP server exposing tools:
@@ -59,14 +84,7 @@ programmatically.
 - `branch_propose_changes`
 - `branch_commit_changes`
 
-AI tools connect via MCP config, auth through API tokens.
-
-### 7. Git engine backend
-**Problem:** Current versioning is application-level in Postgres. Git would
-give us branches, merging, and ecosystem compatibility.
-**Fix:** Each workspace gets a bare Git repo. Web edits create commits
-server-side. CLI pushes to Branch remote. Postgres stores workspace metadata
-and auth — Git stores content.
+With Git engine, MCP tools wrap `git show`, `git log`, `git diff`, `git grep`.
 
 ### 8. Sharing and permissions
 **Problem:** Workspaces are single-user only.
@@ -75,15 +93,15 @@ Share dialog generates invite links. Permissions enforced in API routes.
 
 ### 9. API token management
 **Problem:** CLI auth uses Bearer token with userId, no tokens to manage.
-**Fix:** Generate/revoke API tokens from web settings. Token has scopes
-(read, write). CLI uses proper token format.
+**Fix:** Generate/revoke API tokens from web settings page. Token has scopes
+(read, write). CLI uses proper token format instead of raw userId.
 
 ---
 
 ## Long Term
 
 ### 10. Obsidian plugin
-Sync Branch workspace to Obsidian vault. Two-way sync with version history.
+Sync Branch workspace to Obsidian vault. Two-way sync with Git history.
 
 ### 11. Document branches
 Actual Git branches for document variants. "Draft a new version of the
