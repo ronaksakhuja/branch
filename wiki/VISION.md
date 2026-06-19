@@ -4,7 +4,7 @@
 
 Not scattered across Claude threads, Google Docs, Notion pages, and local markdown files. In one place. With history. With the ability to roll back. With AI as a first-class collaborator, not an afterthought.
 
-Try it at **[branchcli.vercel.app](https://branchcli.vercel.app)**
+**Try it:** [branchcli.vercel.app](https://branchcli.vercel.app) · **CLI:** `npm i -g getbranch` · **GitHub:** [ronaksakhuja/branch](https://github.com/ronaksakhuja/branch)
 
 ---
 
@@ -116,3 +116,34 @@ Where you store, evolve, and revisit important thinking. Personal. Professional.
 4. **Humans stay in control** — review before commit, rollback anytime
 5. **No lock-in** — your documents, your models, your tools
 6. **Beautiful by default** — Apple-inspired design, content-first, intuitive
+
+---
+
+## Try It Now
+
+**[branchcli.vercel.app](https://branchcli.vercel.app)** — Sign in, create a workspace, start writing.
+
+**CLI in 10 seconds:**
+```bash
+npm i -g getbranch
+branch login
+branch workspace list
+branch pull
+branch push -m "Hello world" -a Ronak
+```
+
+**Claude Desktop (MCP):** Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "branch": {
+      "command": "node",
+      "args": ["/path/to/branch/packages/mcp/src/index.js"],
+      "env": {
+        "BRANCH_USER_ID": "<your-user-id>",
+        "BRANCH_WORKSPACE": "<workspace-slug>"
+      }
+    }
+  }
+}
+```
