@@ -32,7 +32,7 @@ export const POST = wrapHandler(async (req, { userId }) => {
     createdBy: userId,
   });
 
-  return NextResponse.json({ token, url: `${process.env.NEXT_PUBLIC_APP_URL || "https://web-iota-ruby-62.vercel.app"}/share/${token}` });
+  return NextResponse.json({ token, url: `${process.env.NEXT_PUBLIC_APP_URL || "https://branchcli.vercel.app"}/share/${token}` });
 });
 
 export const DELETE = wrapHandler(async (req, { userId }) => {

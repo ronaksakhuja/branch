@@ -253,7 +253,7 @@ Claude-native document collaboration via MCP stdio transport.
       "env": {
         "BRANCH_USER_ID": "user_xxx",
         "BRANCH_WORKSPACE": "personal-finance",
-        "BRANCH_API_URL": "https://web-iota-ruby-62.vercel.app"
+        "BRANCH_API_URL": "https://branchcli.vercel.app"
       }
     }
   }

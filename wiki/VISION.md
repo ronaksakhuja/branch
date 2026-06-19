@@ -4,6 +4,8 @@
 
 Not scattered across Claude threads, Google Docs, Notion pages, and local markdown files. In one place. With history. With the ability to roll back. With AI as a first-class collaborator, not an afterthought.
 
+Try it at **[branchcli.vercel.app](https://branchcli.vercel.app)**
+
 ---
 
 ## The Problem We Solve

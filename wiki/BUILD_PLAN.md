@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Web App** — Deployed on Vercel at https://web-iota-ruby-62.vercel.app
+**Web App** — Deployed on Vercel at https://branchcli.vercel.app
 - Clerk auth (sign in/sign out)
 - Neon Postgres via Drizzle ORM
 - Workspace CRUD with slug→ID resolution

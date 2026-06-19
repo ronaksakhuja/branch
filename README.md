@@ -4,7 +4,7 @@
 
 Branch is a cloud markdown workspace with version history, local CLI sync, and AI collaboration. Every document has full change tracking, diffs, and rollback — whether edited by a human or an AI.
 
-Live at **[web-iota-ruby-62.vercel.app](https://web-iota-ruby-62.vercel.app)**
+Live at **[branchcli.vercel.app](https://branchcli.vercel.app)**
 
 ---
 

@@ -19,7 +19,7 @@ const GRAY = "\u001b[90m";
 
 const branchDir = ".branch";
 const configFile = "config.json";
-const API = process.env.BRANCH_API_URL || "https://web-iota-ruby-62.vercel.app";
+const API = process.env.BRANCH_API_URL || "https://branchcli.vercel.app";
 
 let spinnerTimer = null;
 function spin(msg) { process.stdout.write(`\r${GRAY}  ${msg}${R}`); spinnerTimer = setInterval(() => {}, 100); }
@@ -252,11 +252,24 @@ async function cmdPull() {
   spinDone();
 
   const pulled = {};
+  const pulledPaths = new Set();
+
   for (const doc of data.documents) {
     const fp = join(root, doc.path);
     ensureDir(dirname(fp));
     writeFileSync(fp, doc.content);
     pulled[doc.path] = { versionId: doc.currentVersionId, versionNumber: doc.versionNumber, content: doc.content };
+    pulledPaths.add(doc.path);
+  }
+
+  for (const oldPath of Object.keys(cfg.pulledState || {})) {
+    if (!pulledPaths.has(oldPath)) {
+      const fp = join(root, oldPath);
+      if (existsSync(fp)) {
+        const { unlinkSync } = await import("node:fs");
+        try { unlinkSync(fp); } catch {}
+      }
+    }
   }
 
   cfg.pulledState = pulled;
@@ -441,7 +454,7 @@ ${B}Examples${R}
 ${B}Setup${R}
 
   export BRANCH_WORKSPACE=my-workspace
-  export BRANCH_API_URL=https://web-iota-ruby-62.vercel.app
+  export BRANCH_API_URL=https://branchcli.vercel.app
 `);
 }
 

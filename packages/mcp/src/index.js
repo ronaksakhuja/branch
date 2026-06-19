@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const API = process.env.BRANCH_API_URL || "https://web-iota-ruby-62.vercel.app";
+const API = process.env.BRANCH_API_URL || "https://branchcli.vercel.app";
 const USER_ID = process.env.BRANCH_USER_ID || "";
 const WORKSPACE = process.env.BRANCH_WORKSPACE || "";
 

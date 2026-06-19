@@ -56,6 +56,6 @@ export const POST = wrapHandler(async (req, { userId }) => {
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://web-iota-ruby-62.vercel.app";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://branchcli.vercel.app";
   return NextResponse.json({ token, inviteUrl: `${appUrl}/invite/${token}` });
 });
