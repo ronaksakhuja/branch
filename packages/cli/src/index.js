@@ -98,14 +98,16 @@ function localChanges(root, pulled) {
   const pulledMap = pulled || {};
   const changes = [];
   const localMap = new Map(local.map(f => [f.path, f]));
-  for (const f of local) {
-    const p = pulledMap[f.path];
-    if (!p) changes.push({ type: "added", path: f.path, content: f.content });
-    else if (f.content !== p.content) changes.push({ type: "changed", path: f.path, before: p.content, after: f.content });
-  }
+
   for (const [path, p] of Object.entries(pulledMap)) {
-    if (!localMap.has(path)) changes.push({ type: "removed", path, before: p.content });
+    const f = localMap.get(path);
+    if (!f) {
+      changes.push({ type: "removed", path, before: p.content });
+    } else if (f.content !== p.content) {
+      changes.push({ type: "changed", path: f.path, before: p.content, after: f.content });
+    }
   }
+
   return changes;
 }
 
@@ -349,12 +351,7 @@ async function cmdPush({ message, author } = {}) {
       await api(cfg, `/api/workspaces/${wsId}/documents/${ep}`, { method: "DELETE", body: JSON.stringify({ summary: msg }) });
       continue;
     }
-    const exists = cfg.pulledState?.[c.path];
-    if (exists) {
-      await api(cfg, `/api/workspaces/${wsId}/documents/${ep}`, { method: "PUT", body: JSON.stringify({ content: c.after || c.content, summary: msg, authorType }) });
-    } else {
-      await api(cfg, `/api/workspaces/${wsId}/documents`, { method: "POST", body: JSON.stringify({ path: c.path, content: c.content, summary: msg }) });
-    }
+    await api(cfg, `/api/workspaces/${wsId}/documents/${ep}`, { method: "PUT", body: JSON.stringify({ content: c.after, summary: msg, authorType }) });
   }
 
   ok(`Pushed ${changes.length} change${changes.length !== 1 ? "s" : ""}.`);
