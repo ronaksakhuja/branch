@@ -47,18 +47,99 @@ function timeAgo(ts: string) {
 const colors = ["#0071e3", "#30d158", "#ff9f0a", "#ff375f", "#5e5ce6", "#64d2ff", "#ac8e68"];
 function wsColor(i: number) { return colors[i % colors.length]; }
 
+function LandingPage() {
+  return (
+    <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+      <header className="flex h-14 items-center justify-between px-6 border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl fixed top-0 inset-x-0 z-50">
+        <span className="text-[17px] font-semibold tracking-tight">Branch</span>
+        <div className="flex items-center gap-4">
+          <a href="https://github.com/ronaksakhuja/branch" className="text-[14px] text-[#86868b] transition hover:text-[#1d1d1f]">GitHub</a>
+          <a href="https://www.npmjs.com/package/getbranch" className="text-[14px] text-[#86868b] transition hover:text-[#1d1d1f]">CLI</a>
+          <SignInButton mode="modal">
+            <button className="rounded-full bg-[#0071e3] px-5 py-2 text-[14px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Sign In</button>
+          </SignInButton>
+        </div>
+      </header>
+
+      <section className="pt-32 pb-20 px-6 text-center">
+        <h1 className="text-[56px] font-bold tracking-[-0.04em] leading-[1.05] max-w-[700px] mx-auto">
+          Git for documents.<br />Built for humans and AI.
+        </h1>
+        <p className="mt-6 text-[19px] text-[#86868b] max-w-[500px] mx-auto leading-relaxed">
+          A markdown workspace where every change is tracked, every version is reviewable, and humans and AI edit the same source of truth.
+        </p>
+        <div className="mt-10 flex items-center justify-center gap-3">
+          <SignInButton mode="modal">
+            <button className="rounded-full bg-[#0071e3] px-8 py-3 text-[16px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Get Started</button>
+          </SignInButton>
+          <a href="https://www.npmjs.com/package/getbranch" className="rounded-full border border-[#e5e5ea] bg-white px-8 py-3 text-[16px] font-medium text-[#1d1d1f] transition hover:bg-[#f5f5f7] active:scale-[0.98]">CLI →</a>
+        </div>
+      </section>
+
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-[900px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
+          {[
+            { title: "Version History", desc: "Every edit creates a version. See what changed, when, and by whom — human or AI.", icon: "⟳" },
+            { title: "AI Collaboration", desc: "Claude and ChatGPT read and edit documents through CLI, API, or MCP. You review before commit.", icon: "⚡" },
+            { title: "Real Git", desc: "Every workspace is a private GitHub repo. Real commits, real diffs, real rollbacks. Export anytime.", icon: "⎇" },
+          ].map((f) => (
+            <div key={f.title} className="text-center">
+              <div className="w-12 h-12 rounded-xl bg-[#f5f5f7] mx-auto mb-4 flex items-center justify-center text-2xl">{f.icon}</div>
+              <h3 className="text-[17px] font-semibold">{f.title}</h3>
+              <p className="mt-2 text-[14px] text-[#86868b] leading-relaxed">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="py-20 px-6">
+        <div className="max-w-[900px] mx-auto text-center">
+          <h2 className="text-[32px] font-semibold tracking-[-0.02em]">How it works</h2>
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+            {[
+              { step: "01", title: "Create a workspace", desc: "A workspace holds your markdown documents. Each one gets a private GitHub repo." },
+              { step: "02", title: "Write and edit", desc: "Use the web editor, local CLI, or let Claude propose changes. Everything is tracked." },
+              { step: "03", title: "Review and share", desc: "See diffs, restore old versions, share read-only links with anyone." },
+            ].map((s) => (
+              <div key={s.step} className="rounded-2xl border border-[#e5e5ea] bg-white p-6">
+                <span className="text-[11px] font-semibold text-[#0071e3] uppercase tracking-wider">{s.step}</span>
+                <h3 className="mt-3 text-[17px] font-semibold">{s.title}</h3>
+                <p className="mt-2 text-[14px] text-[#86868b] leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 px-6 bg-[#1d1d1f] text-white">
+        <div className="max-w-[700px] mx-auto text-center">
+          <h2 className="text-[28px] font-semibold tracking-[-0.02em]">Built for the terminal, too</h2>
+          <p className="mt-3 text-[15px] text-[#86868b]">One command to install. Zero dependencies. Works with Claude Code, Cursor, and any AI agent.</p>
+          <div className="mt-8 bg-[#2d2d2f] rounded-2xl p-6 text-left font-mono text-[14px] leading-relaxed text-[#30d158] overflow-x-auto mx-auto max-w-[500px]">
+            <span className="text-[#86868b]">$</span> npm i -g getbranch<br />
+            <span className="text-[#86868b]">$</span> branch login<br />
+            <span className="text-[#86868b]">$</span> branch workspace personal-finance<br />
+            <span className="text-[#86868b]">$</span> branch pull<br />
+            <span className="text-[#86868b]">$</span> branch push -m &quot;Updated budget&quot; -a Claude<br />
+            <span className="text-[#86868b]">$</span> branch diff --json
+          </div>
+        </div>
+      </section>
+
+      <footer className="py-10 px-6 text-center border-t border-[#e5e5ea]">
+        <p className="text-[13px] text-[#86868b]">
+          Branch is open source.{" "}
+          <a href="https://github.com/ronaksakhuja/branch" className="text-[#0071e3] hover:underline">github.com/ronaksakhuja/branch</a>
+        </p>
+      </footer>
+    </div>
+  );
+}
+
 export default function Home() {
   const { user, isLoaded } = useUser();
   if (!isLoaded) return <div className="flex h-screen items-center justify-center bg-[#f5f5f7]"><div className="h-1.5 w-32 rounded-full bg-[#e5e5ea] animate-pulse" /></div>;
-  if (!user) return (
-    <div className="flex h-screen flex-col items-center justify-center bg-[#f5f5f7] gap-6">
-      <h1 className="text-[36px] font-bold tracking-tight text-[#1d1d1f]">Branch</h1>
-      <p className="text-[17px] text-[#86868b] -mt-4">Git for documents. Built for humans and AI.</p>
-      <SignInButton mode="modal">
-        <button className="mt-2 rounded-full bg-[#0071e3] px-8 py-2.5 text-[15px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Sign In</button>
-      </SignInButton>
-    </div>
-  );
+  if (!user) return <LandingPage />;
   return <AppShell userId={user.id} />;
 }
 
@@ -106,7 +187,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center justify-between border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-5 flex-shrink-0">
         <h1 className="text-[15px] font-semibold text-[#1d1d1f]">Branch</h1>
-        <SignOutButton><button className="rounded-full bg-[#f5f5f7] px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#e5e5ea] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
+        <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -191,7 +272,7 @@ function WorkspaceView({ workspace, userId, workspaces }: { workspace: Workspace
         </button>
         <span className="text-[15px] font-semibold text-[#1d1d1f]">{workspace.name}</span>
         <div className="flex-1" />
-        <SignOutButton><button className="rounded-full bg-[#f5f5f7] px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#e5e5ea] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
+        <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[13px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -294,7 +375,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         <span className="text-[12px] text-[#86868b]">v{doc.versions.length}</span>
         <div className="flex-1" />
         <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded-lg border border-[#e5e5ea] px-3 py-1 text-[12px] font-medium text-[#1d1d1f] transition hover:bg-[#f5f5f7]">Share</button>
-        <SignOutButton><button className="rounded-full bg-[#f5f5f7] px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#e5e5ea] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
+        <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
 
       <div className="flex flex-1 overflow-hidden">

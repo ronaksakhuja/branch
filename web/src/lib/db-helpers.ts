@@ -6,7 +6,6 @@ import {
   initWorkspaceRepo,
   commitDocument,
   readDocument as gitReadDocument,
-  listFiles as gitListFiles,
   getLog as gitGetLog,
   deleteDocument as gitDeleteDocument,
 } from "./git-engine";
@@ -64,27 +63,7 @@ export async function createWorkspace(userId: string, name: string, slug: string
 
 export async function listDocuments(workspaceId: string) {
   const db = getDb();
-
-  const gitFiles = await gitListFiles(workspaceId).catch(() => [] as string[]);
-  const dbDocs = await db.select().from(documents).where(and(eq(documents.workspaceId, workspaceId), isNull(documents.deletedAt))).orderBy(documents.path);
-
-  const gitPaths = new Set(gitFiles);
-  for (const gitPath of gitFiles) {
-    if (!dbDocs.find((d) => d.path === gitPath)) {
-      dbDocs.push({
-        id: `git-${gitPath}`,
-        workspaceId,
-        path: gitPath,
-        title: titleFromPath(gitPath),
-        currentVersionId: null,
-        deletedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-  }
-
-  return dbDocs.filter((d) => gitPaths.has(d.path)).sort((a, b) => a.path.localeCompare(b.path));
+  return db.select().from(documents).where(and(eq(documents.workspaceId, workspaceId), isNull(documents.deletedAt))).orderBy(documents.path);
 }
 
 export async function getDocument(workspaceId: string, path: string) {
