@@ -350,6 +350,10 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [members, setMembers] = useState<{ userId: string; role: string; name: string | null; email: string | null }[]>([]);
   const [invites, setInvites] = useState<{ id: string; email: string; role: string; token: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [sidebarTab, setSidebarTab] = useState<"versions" | "comments">("versions");
+  const [comments, setComments] = useState<{ id: string; lineNumber: number; content: string; authorName: string | null; authorEmail: string | null; authorId: string; resolvedAt: string | null; resolvedById: string | null; createdAt: string }[]>([]);
+  const [newCommentLine, setNewCommentLine] = useState("");
+  const [newCommentText, setNewCommentText] = useState("");
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
 
   const loadDoc = useCallback(async (path: string) => {
@@ -390,6 +394,49 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   async function invitePerson() { if (!inviteEmail.trim()) return; try { const d = await createInvite(workspaceId, inviteEmail.trim(), "viewer"); setInvites((i) => [...i, { id: d.token, email: inviteEmail.trim(), role: "viewer", token: d.token }]); setInviteEmail(""); } catch {} }
   async function cancelInv(id: string) { await cancelInvite(workspaceId, id); setInvites((i) => i.filter((inv) => inv.id !== id)); }
   async function removePerson(uid: string) { await removeMember(workspaceId, uid); loadShareData(); }
+
+  async function loadComments() {
+    if (!doc) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`);
+      const data = await res.json();
+      setComments(data);
+    } catch {}
+  }
+
+  async function addComment() {
+    if (!doc || !newCommentText.trim()) return;
+    const line = parseInt(newCommentLine) || 0;
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineNumber: line, content: newCommentText.trim() }),
+      });
+      setNewCommentText(""); setNewCommentLine("");
+      loadComments();
+    } catch {}
+  }
+
+  async function resolveComment(commentId: string) {
+    if (!doc) return;
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments/${commentId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolved: true }),
+      });
+      loadComments();
+    } catch {}
+  }
+
+  async function deleteComment(commentId: string) {
+    if (!doc) return;
+    try {
+      await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments/${commentId}`, { method: "DELETE" });
+      loadComments();
+    } catch {}
+  }
+
+  useEffect(() => { if (doc) loadComments(); }, [doc]);
 
   async function deleteDoc() {
     if (!doc || !confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
@@ -455,6 +502,12 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         </main>
 
         <aside className="w-[240px] flex-shrink-0 border-l border-[#e5e5ea] bg-white flex flex-col">
+          <div className="flex border-b border-[#e5e5ea]">
+            {(["versions", "comments"] as const).map((t) => (
+              <button key={t} onClick={() => setSidebarTab(t)}
+                className={`flex-1 py-2 text-[11px] font-semibold capitalize text-center transition ${sidebarTab === t ? "text-[#1d1d1f] border-b-2 border-[#0071e3] -mb-px" : "text-[#86868b] hover:text-[#1d1d1f]"}`}>{t}</button>
+            ))}
+          </div>
           <div className="border-b border-[#e5e5ea] px-3 py-2.5">
             <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Mode</p>
             <div className="flex rounded-lg bg-[#f5f5f7] p-0.5">
@@ -466,20 +519,60 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
-            <div className="px-1.5 space-y-0.5">
-              {[...doc.versions].reverse().map((v) => (
-                <button key={v.id} onClick={() => selectVersion(v)}
-                  className={`w-full rounded-md px-2.5 py-2 text-left transition ${selectedVersion?.id === v.id ? "bg-[#0071e3]/10" : "hover:bg-[#f5f5f7]"}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium">v{v.versionNumber}</span>
-                    <span className="text-[11px] text-[#86868b]">{new Date(v.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+            {sidebarTab === "versions" ? (
+              <>
+                <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
+                <div className="px-1.5 space-y-0.5">
+                  {[...doc.versions].reverse().map((v) => (
+                    <button key={v.id} onClick={() => selectVersion(v)}
+                      className={`w-full rounded-md px-2.5 py-2 text-left transition ${selectedVersion?.id === v.id ? "bg-[#0071e3]/10" : "hover:bg-[#f5f5f7]"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] font-medium">v{v.versionNumber}</span>
+                        <span className="text-[11px] text-[#86868b]">{new Date(v.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-[#86868b] line-clamp-2">{v.summary}</p>
+                      <p className="mt-0.5 text-[10px] text-[#c5c5ca]">{v.authorName}</p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col h-full">
+                <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Comments</p></div>
+                <div className="flex-1 overflow-y-auto px-2 space-y-1.5">
+                  {comments.length === 0 && <p className="py-6 text-center text-[12px] text-[#86868b]">No comments yet</p>}
+                  {[...comments].reverse().map((c) => (
+                    <div key={c.id} className={`rounded-lg border px-3 py-2 ${c.resolvedAt ? "border-amber-100 bg-amber-50/50" : "border-[#e5e5ea]"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-[#0071e3]">Line {c.lineNumber}</span>
+                        <span className="text-[10px] text-[#86868b]">{new Date(c.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                      </div>
+                      <p className="mt-1 text-[12px] text-[#1d1d1f] leading-relaxed">{c.content}</p>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="text-[10px] text-[#86868b]">{c.authorName || c.authorEmail || c.authorId.slice(0, 8)}</span>
+                        <div className="flex gap-2">
+                          {c.resolvedAt ? (
+                            <span className="text-[10px] text-amber-600 font-medium">Resolved</span>
+                          ) : (
+                            <button onClick={() => resolveComment(c.id)} className="text-[10px] font-medium text-[#0071e3] transition hover:underline">Resolve</button>
+                          )}
+                          {c.authorId === userId && !c.resolvedAt && (
+                            <button onClick={() => deleteComment(c.id)} className="text-[10px] font-medium text-[#ff3b30] transition hover:underline">Delete</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-[#e5e5ea] p-2 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <input className="w-14 rounded-md border border-[#e5e5ea] px-2 py-1 text-[12px] outline-none focus:border-[#0071e3]" placeholder="Ln" value={newCommentLine} onChange={(e) => setNewCommentLine(e.target.value)} />
+                    <input className="flex-1 rounded-md border border-[#e5e5ea] px-2 py-1 text-[12px] outline-none focus:border-[#0071e3]" placeholder="Add comment..." value={newCommentText} onChange={(e) => setNewCommentText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addComment()} />
+                    <button onClick={addComment} className="rounded-md bg-[#0071e3] px-2 py-1 text-[12px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
                   </div>
-                  <p className="mt-0.5 text-[12px] text-[#86868b] line-clamp-2">{v.summary}</p>
-                  <p className="mt-0.5 text-[10px] text-[#c5c5ca]">{v.authorName}</p>
-                </button>
-              ))}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-[#e5e5ea] p-3 space-y-2">

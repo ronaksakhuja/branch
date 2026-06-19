@@ -110,6 +110,30 @@ export const gitRefs = pgTable(
   ],
 );
 
+export const comments = pgTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    documentPath: text("document_path").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    content: text("content").notNull(),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedById: text("resolved_by_id").references(() => users.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("comments_doc_idx").on(table.workspaceId, table.documentPath),
+    index("comments_author_idx").on(table.authorId),
+  ],
+);
+
 export const shareLinks = pgTable(
   "share_links",
   {
