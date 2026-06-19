@@ -163,7 +163,8 @@ branch/
 ├── packages/cli/           # CLI (published as getbranch)
 │   ├── src/index.js         # Single-file, zero deps
 │   └── package.json
-├── PRD.md                  # Product requirements
-├── BUILD_PLAN.md           # Architecture & roadmap
+├── wiki/                   # Documentation
+│   ├── PRD.md                  # Product requirements
+│   └── BUILD_PLAN.md           # Architecture & roadmap
 └── README.md
 ```
