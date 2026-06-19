@@ -187,7 +187,7 @@ function HomeView({ workspaces, userId, newWsName, setNewWsName }: { workspaces:
     <div className="flex h-screen flex-col bg-[#f5f5f7]">
       <header className="flex h-12 items-center justify-between border-b border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-5 flex-shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-[15px] font-semibold text-[#1d1d1f]">Branch</span>
+          <button onClick={() => router.push("/")} className="text-[15px] font-semibold text-[#1d1d1f] transition hover:opacity-70">Branch</button>
           <span className="text-[#c5c5ca] text-[13px]">—</span>
           <span className="text-[13px] text-[#86868b]">Workspaces</span>
         </div>
@@ -335,7 +335,6 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showVersions, setShowVersions] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [shareLinks, setShareLinks] = useState<{ token: string; documentPath: string | null }[]>([]);
   const [members, setMembers] = useState<{ userId: string; role: string; name: string | null; email: string | null }[]>([]);
@@ -381,7 +380,6 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         <span className="text-[15px] font-semibold text-[#1d1d1f] truncate">{doc.title}</span>
         <span className="text-[12px] text-[#86868b] ml-1">v{doc.versions.length}</span>
         <div className="flex-1" />
-        <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded-lg border border-[#e5e5ea] px-3 py-1 text-[12px] font-medium text-[#1d1d1f] transition hover:bg-[#f5f5f7]">Share</button>
         <SignOutButton><button className="rounded-full border border-[#e5e5ea] bg-white px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]">Sign Out</button></SignOutButton>
       </header>
 
@@ -423,13 +421,20 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
           )}
         </main>
 
-        {showVersions && (
-          <aside className="w-[220px] flex-shrink-0 border-l border-[#e5e5ea] bg-white overflow-y-auto">
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#e5e5ea]">
-              <span className="text-[12px] font-semibold text-[#1d1d1f]">Versions</span>
-              <button onClick={() => setShowVersions(false)} className="rounded p-0.5 text-[#86868b] transition hover:text-[#1d1d1f]"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></button>
+        <aside className="w-[240px] flex-shrink-0 border-l border-[#e5e5ea] bg-white flex flex-col">
+          <div className="border-b border-[#e5e5ea] px-3 py-2.5">
+            <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Mode</p>
+            <div className="flex rounded-lg bg-[#f5f5f7] p-0.5">
+              {(["view", "edit", "diff"] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`flex-1 rounded-md py-1 text-[12px] font-medium capitalize transition ${mode === m ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#86868b] hover:text-[#1d1d1f]"}`}>{m}</button>
+              ))}
             </div>
-            <div className="p-2 space-y-0.5">
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
+            <div className="px-1.5 space-y-0.5">
               {[...doc.versions].reverse().map((v) => (
                 <button key={v.id} onClick={() => { setSelectedVersionId(v.id); setMode("diff"); }}
                   className={`w-full rounded-md px-2.5 py-2 text-left transition ${selectedVersion?.id === v.id ? "bg-[#0071e3]/10" : "hover:bg-[#f5f5f7]"}`}>
@@ -438,24 +443,18 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                     <span className="text-[11px] text-[#86868b]">{new Date(v.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
                   </div>
                   <p className="mt-0.5 text-[12px] text-[#86868b] line-clamp-2">{v.summary}</p>
+                  <p className="mt-0.5 text-[10px] text-[#c5c5ca]">{v.authorName}</p>
                 </button>
               ))}
             </div>
-          </aside>
-        )}
-      </div>
+          </div>
 
-      <footer className="flex items-center justify-between border-t border-[#e5e5ea] bg-white/80 backdrop-blur-xl px-4 py-1.5 flex-shrink-0">
-        <div className="flex items-center gap-1">
-          {(["view", "edit", "diff"] as const).map((m) => (
-            <button key={m} onClick={() => setMode(m)} className={`rounded-md px-2.5 py-1 text-[12px] font-medium capitalize transition ${mode === m ? "bg-[#0071e3]/10 text-[#0071e3]" : "text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7]"}`}>{m}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setShowVersions(!showVersions)} className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition ${showVersions ? "bg-[#1d1d1f]/5 text-[#1d1d1f]" : "text-[#86868b] hover:text-[#1d1d1f]"}`}>Versions</button>
-          <button onClick={() => { setMode("edit"); setDraft(doc.content); }} className="rounded-full bg-[#0071e3] px-3 py-1 text-[12px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Edit</button>
-        </div>
-      </footer>
+          <div className="border-t border-[#e5e5ea] p-3 space-y-2">
+            <button onClick={() => { setMode("edit"); setDraft(doc.content); }} className="w-full rounded-full bg-[#0071e3] py-1.5 text-[13px] font-medium text-white transition hover:bg-[#0077ed] active:scale-[0.98]">Edit</button>
+            <button onClick={() => { loadShareData(); setShowShare(true); }} className="w-full rounded-full border border-[#e5e5ea] bg-white py-1.5 text-[13px] text-[#1d1d1f] transition hover:bg-[#f5f5f7]">Share</button>
+          </div>
+        </aside>
+      </div>
 
       {showShare && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setShowShare(false)}>
