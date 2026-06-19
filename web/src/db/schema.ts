@@ -131,3 +131,26 @@ export const shareLinks = pgTable(
     index("share_links_workspace_idx").on(table.workspaceId),
   ],
 );
+
+export const pendingInvites = pgTable(
+  "pending_invites",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    email: text("email").notNull(),
+    role: text("role", { enum: ["viewer", "editor"] }).default("viewer").notNull(),
+    token: text("token").notNull().unique(),
+    invitedBy: text("invited_by")
+      .notNull()
+      .references(() => users.id),
+    acceptedAt: timestamp("accepted_at"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("pending_invites_token_idx").on(table.token),
+    index("pending_invites_workspace_idx").on(table.workspaceId),
+  ],
+);

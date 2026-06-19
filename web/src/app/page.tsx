@@ -7,6 +7,8 @@ import { useUser, SignInButton, SignOutButton } from "@clerk/nextjs";
 import {
   fetchWorkspaces, createWorkspace, fetchDocuments, getDocument,
   createDocumentApi, updateDocument,
+  fetchShareLinks, createShareLink, revokeShareLink,
+  fetchMembers, createInvite, fetchInvites, cancelInvite, removeMember,
 } from "@/lib/api";
 
 type AuthorType = "Human" | "AI";
@@ -66,16 +68,20 @@ function TopBar({ children, right }: { children?: React.ReactNode; right?: React
 }
 
 function WorkspaceView({ userId }: { userId: string; userName: string }) {
-  const [workspaces, setWorkspaces] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string; slug: string; ownerId?: string; role?: string }[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
 
-  useEffect(() => { fetchWorkspaces().then((d) => { setWorkspaces(d); if (d.length) setWorkspaceId(d[0].id); }).catch(console.error).finally(() => setLoading(false)); }, []);
+  useEffect(() => { fetchWorkspaces(true).then((d) => { setWorkspaces(d); if (d.length) setWorkspaceId(d[0].id); }).catch(console.error).finally(() => setLoading(false)); }, []);
 
   if (loading) return <Shell><p className="text-sm text-zinc-400 m-16">Loading...</p></Shell>;
+
+  const yours = workspaces.filter((w) => !w.ownerId || w.ownerId === userId || w.role === "owner");
+  const shared = workspaces.filter((w) => w.ownerId && w.ownerId !== userId && w.role !== "owner");
+
   if (workspaces.length === 0) {
-    const create = async () => { const n = name.trim(); if (!n) return; const r = await createWorkspace(n, slugify(n)); setWorkspaces([{ id: r.id, name: n, slug: slugify(n) }]); setWorkspaceId(r.id); };
+    const create = async () => { const n = name.trim(); if (!n) return; const r = await createWorkspace(n, slugify(n)); setWorkspaces([{ id: r.id, name: n, slug: slugify(n), ownerId: userId }]); setWorkspaceId(r.id); };
     return (
       <Shell>
         <TopBar />
@@ -91,10 +97,10 @@ function WorkspaceView({ userId }: { userId: string; userName: string }) {
     );
   }
 
-  return <DocumentView workspaceId={workspaceId!} userId={userId} workspaces={workspaces} setWorkspaceId={setWorkspaceId} />;
+  return <DocumentView workspaceId={workspaceId!} userId={userId} workspaces={workspaces} yours={yours} shared={shared} setWorkspaceId={setWorkspaceId} />;
 }
 
-function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId: string; userId: string; workspaces: { id: string; name: string; slug: string }[]; setWorkspaceId: (id: string) => void }) {
+function DocumentView({ workspaceId, userId, workspaces, yours, shared, setWorkspaceId }: { workspaceId: string; userId: string; workspaces: { id: string; name: string; slug: string; ownerId?: string; role?: string }[]; yours: typeof workspaces; shared: typeof workspaces; setWorkspaceId: (id: string) => void }) {
   const [docs, setDocs] = useState<DocMeta[]>([]);
   const [doc, setDoc] = useState<DocumentRecord | null>(null);
   const [draft, setDraft] = useState("");
@@ -108,11 +114,10 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
   const [showVersions, setShowVersions] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [shareTab, setShareTab] = useState<"link" | "members">("link");
   const [shareLinks, setShareLinks] = useState<{ token: string; documentPath: string | null; createdAt: string }[]>([]);
   const [members, setMembers] = useState<{ userId: string; role: string; name: string | null; email: string | null }[]>([]);
+  const [invites, setInvites] = useState<{ id: string; email: string; role: string; token: string }[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [newSharePath, setNewSharePath] = useState("");
   const loaded = useRef(false);
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
 
@@ -146,46 +151,45 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
 
   async function loadShareData() {
     try {
-      const [linksRes, membersRes] = await Promise.all([
-        fetch(`/api/workspaces/${workspaceId}/share`).then((r) => r.json()),
-        fetch(`/api/workspaces/${workspaceId}/members`).then((r) => r.json()),
+      const [linksRes, membersRes, invitesRes] = await Promise.all([
+        fetchShareLinks(workspaceId),
+        fetchMembers(workspaceId),
+        fetchInvites(workspaceId),
       ]);
       setShareLinks(linksRes);
       setMembers(membersRes);
+      setInvites(invitesRes);
     } catch {}
   }
 
-  async function createShareLink() {
+  async function createLink() {
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/share`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentPath: newSharePath || null }),
-      });
-      const data = await res.json();
-      setShareLinks((l) => [...l, { token: data.token, documentPath: newSharePath || null, createdAt: new Date().toISOString() }]);
-      setNewSharePath("");
+      const data = await createShareLink(workspaceId, doc?.path);
+      setShareLinks((l) => [...l, { token: data.token, documentPath: doc?.path || null, createdAt: new Date().toISOString() }]);
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
 
-  async function revokeShareLink(token: string) {
-    await fetch(`/api/workspaces/${workspaceId}/share?token=${token}`, { method: "DELETE" });
+  async function revokeLink(token: string) {
+    await revokeShareLink(workspaceId, token);
     setShareLinks((l) => l.filter((s) => s.token !== token));
   }
 
-  async function inviteMember() {
+  async function invitePerson() {
     if (!inviteEmail.trim()) return;
     try {
-      await fetch(`/api/workspaces/${workspaceId}/members`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: "viewer" }),
-      });
+      const data = await createInvite(workspaceId, inviteEmail.trim(), "viewer");
+      setInvites((i) => [...i, { id: data.token, email: inviteEmail.trim(), role: "viewer", token: data.token }]);
       setInviteEmail("");
-      loadShareData();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
   }
 
-  async function removeMember(targetUserId: string) {
-    await fetch(`/api/workspaces/${workspaceId}/members?userId=${targetUserId}`, { method: "DELETE" });
+  async function cancelPersonInvite(inviteId: string) {
+    await cancelInvite(workspaceId, inviteId);
+    setInvites((i) => i.filter((inv) => inv.id !== inviteId));
+  }
+
+  async function removePerson(targetUserId: string) {
+    await removeMember(workspaceId, targetUserId);
     loadShareData();
   }
 
@@ -194,10 +198,10 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
       <TopBar
         right={
           <div className="flex items-center gap-3">
-            <select className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600 outline-none" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
-              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            <select className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600 outline-none max-w-[200px]" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
+              {yours.length > 0 && <optgroup label="Your workspaces">{yours.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</optgroup>}
+              {shared.length > 0 && <optgroup label="Shared with you">{shared.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</optgroup>}
             </select>
-            <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100">Share</button>
             <SignOutButton><button className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100">Sign out</button></SignOutButton>
           </div>
         }
@@ -208,6 +212,7 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
             <span className="text-zinc-300">/</span>
             <span className="text-sm font-medium text-zinc-800">{doc.title}</span>
             <span className="text-xs text-zinc-400">v{doc.versions.length}</span>
+            <button onClick={() => { loadShareData(); setShowShare(true); }} className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 transition hover:bg-zinc-100">Share</button>
           </>
         )}
       </TopBar>
@@ -311,65 +316,71 @@ function DocumentView({ workspaceId, workspaces, setWorkspaceId }: { workspaceId
       {showShare && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setShowShare(false)}>
           <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex border-b border-zinc-100">
-              {(["link", "members"] as const).map((tab) => (
-                <button key={tab} onClick={() => setShareTab(tab)}
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium capitalize transition ${shareTab === tab ? "border-b-2 border-zinc-900 text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}>
-                  {tab === "link" ? "Share Link" : "Collaborators"}
-                </button>
-              ))}
-              <button onClick={() => setShowShare(false)} className="px-4 py-2.5 text-sm text-zinc-400 hover:text-zinc-600">✕</button>
+            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+              <h3 className="text-sm font-semibold text-zinc-800">Share {doc?.title || "workspace"}</h3>
+              <button onClick={() => setShowShare(false)} className="text-zinc-400 hover:text-zinc-600">✕</button>
             </div>
 
-            {shareTab === "link" && (
-              <div className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <input className="flex-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500" placeholder="Document path (or leave empty for workspace)" value={newSharePath} onChange={(e) => setNewSharePath(e.target.value)} />
-                  <button onClick={createShareLink} className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700">Create</button>
-                </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <p className="text-xs font-medium text-zinc-500 mb-2">Share link</p>
                 {shareLinks.length === 0 ? (
-                  <p className="text-xs text-zinc-400 text-center py-3">No share links yet</p>
+                  <button onClick={createLink} className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-700">
+                    + Create a read-only link
+                  </button>
                 ) : (
                   <div className="space-y-2">
                     {shareLinks.map((link) => (
                       <div key={link.token} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-zinc-700">{link.documentPath || "Entire workspace"}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs text-zinc-700">{link.documentPath || "Entire workspace"}</p>
                           <p className="font-mono text-[10px] text-zinc-400 truncate">{`/share/${link.token}`}</p>
                         </div>
-                        <button onClick={() => revokeShareLink(link.token)} className="ml-2 rounded px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50">Revoke</button>
+                        <button onClick={() => revokeLink(link.token)} className="ml-2 text-[10px] font-medium text-red-500 hover:text-red-700">Revoke</button>
                       </div>
                     ))}
+                    <button onClick={createLink} className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-1.5 text-[10px] text-zinc-500 transition hover:border-zinc-400">+ New link</button>
                   </div>
                 )}
               </div>
-            )}
 
-            {shareTab === "members" && (
-              <div className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <input className="flex-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500" placeholder="Email address" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && inviteMember()} />
-                  <button onClick={inviteMember} className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700">Invite</button>
+              <div className="border-t border-zinc-100 pt-4">
+                <p className="text-xs font-medium text-zinc-500 mb-2">Invite people</p>
+                <div className="flex gap-2 mb-3">
+                  <input className="flex-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500" placeholder="Email address" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && invitePerson()} />
+                  <button onClick={invitePerson} className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-zinc-700">Invite</button>
                 </div>
-                {members.length === 0 ? (
-                  <p className="text-xs text-zinc-400 text-center py-3">No collaborators yet</p>
-                ) : (
-                  <div className="space-y-1">
+
+                {members.length > 0 && (
+                  <div className="space-y-1 mb-2">
                     {members.map((m) => (
-                      <div key={m.userId} className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-2">
+                      <div key={m.userId} className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-1.5">
                         <div>
-                          <p className="text-sm font-medium text-zinc-700">{m.name || m.email || m.userId}</p>
+                          <p className="text-xs font-medium text-zinc-700">{m.name || m.email || m.userId}</p>
                           <p className="text-[10px] text-zinc-400 uppercase">{m.role}</p>
                         </div>
-                        {m.role !== "owner" && (
-                          <button onClick={() => removeMember(m.userId)} className="rounded px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-50">Remove</button>
-                        )}
+                        {m.role !== "owner" && <button onClick={() => removePerson(m.userId)} className="text-[10px] font-medium text-red-500 hover:text-red-700">Remove</button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {invites.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-zinc-400 mb-1">Pending invites</p>
+                    {invites.map((inv) => (
+                      <div key={inv.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-amber-50/50 px-3 py-1.5">
+                        <div>
+                          <p className="text-xs text-zinc-600">{inv.email}</p>
+                          <p className="text-[10px] text-zinc-400">Awaiting acceptance</p>
+                        </div>
+                        <button onClick={() => cancelPersonInvite(inv.id)} className="text-[10px] font-medium text-red-500 hover:text-red-700">Cancel</button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}

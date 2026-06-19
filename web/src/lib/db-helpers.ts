@@ -1,5 +1,5 @@
 import { getDb } from "@/db";
-import { documents, workspaces } from "@/db/schema";
+import { documents, workspaces, workspaceMembers } from "@/db/schema";
 import { eq, and, desc, isNull, or } from "drizzle-orm";
 import { id } from "./auth-helpers";
 import {
@@ -23,9 +23,33 @@ export async function resolveWorkspaceId(identifier: string) {
   return rows[0].id;
 }
 
-export async function listWorkspaces(userId: string) {
+export async function listWorkspaces(userId: string, includeShared = false) {
   const db = getDb();
-  return db.select().from(workspaces).where(eq(workspaces.ownerId, userId)).orderBy(desc(workspaces.updatedAt));
+
+  if (!includeShared) {
+    return db.select().from(workspaces).where(eq(workspaces.ownerId, userId)).orderBy(desc(workspaces.updatedAt));
+  }
+
+  const owned = await db.select().from(workspaces).where(eq(workspaces.ownerId, userId));
+
+  const shared = await db
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      slug: workspaces.slug,
+      ownerId: workspaces.ownerId,
+      createdAt: workspaces.createdAt,
+      updatedAt: workspaces.updatedAt,
+      role: workspaceMembers.role,
+    })
+    .from(workspaces)
+    .innerJoin(workspaceMembers, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(eq(workspaceMembers.userId, userId));
+
+  const ownedIds = new Set(owned.map((w) => w.id));
+  const unique = [...owned, ...shared.filter((s) => !ownedIds.has(s.id))];
+
+  return unique.sort((a, b) => new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime());
 }
 
 export async function createWorkspace(userId: string, name: string, slug: string) {
