@@ -26,6 +26,16 @@ The document is never a living artifact — it's a series of disconnected snapsh
 
 Google Docs is great for real-time typing, but AI doesn't use cursors. Notion is great for databases, but its markdown is an afterthought. GitHub is perfect for code, but nobody wants to teach a product manager `git rebase`. None of these tools treat AI as a collaborator — someone who reads, proposes, and commits changes with the same standing as a human.
 
+### Why not just use GitHub?
+
+Branch uses GitHub under the hood — every workspace is a real private Git repo. So why not use GitHub directly?
+
+Because GitHub was designed for code, and most people who work with documents are not developers. They don't want to learn `git clone` or `git push`. They want to click a line and leave a comment. They want to share a read-only link that renders beautifully, like Google Docs. They want to see what changed without decoding a diff.
+
+GitHub gives you the engine. Branch gives you the steering wheel, the dashboard, and a seat that feels familiar. Same power, zero learning curve.
+
+The CLI is for those who want it — `branch push --author Claude` is a thin wrapper around `git commit`. AI agents use it. Developers use it. Everyone else uses the web UI. They're all working on the same Git repo. They just don't need to know it.
+
 ### AI needs context, not just content
 
 When an AI reviews a document, it needs more than the current text. It needs to know what changed, why, and who made each decision. It needs the comment threads, the version history, the context of every revision. Without this, it's guessing. With it, it's informed.
