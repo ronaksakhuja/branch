@@ -334,9 +334,12 @@ function DocumentView({ workspaceId, userId, workspaces, yours, shared, setWorks
                       <div key={link.token} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs text-zinc-700">{link.documentPath || "Entire workspace"}</p>
-                          <p className="font-mono text-[10px] text-zinc-400 truncate">{`/share/${link.token}`}</p>
+                          <p className="font-mono text-[10px] text-zinc-400 truncate">{`${window.location.origin}/share/${link.token}`}</p>
                         </div>
-                        <button onClick={() => revokeLink(link.token)} className="ml-2 text-[10px] font-medium text-red-500 hover:text-red-700">Revoke</button>
+                        <div className="ml-2 flex items-center gap-1">
+                          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/share/${link.token}`); }} className="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-700">Copy</button>
+                          <button onClick={() => revokeLink(link.token)} className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-500 transition hover:bg-red-50 hover:text-red-700">Revoke</button>
+                        </div>
                       </div>
                     ))}
                     <button onClick={createLink} className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-1.5 text-[10px] text-zinc-500 transition hover:border-zinc-400">+ New link</button>
