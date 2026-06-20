@@ -352,7 +352,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [inviteEmail, setInviteEmail] = useState("");
   const [commentLine, setCommentLine] = useState("");
   const [commentText, setCommentText] = useState("");
-  const [commentSelection, setCommentSelection] = useState<{ line: number; x: number; y: number } | null>(null);
+  const [commentSelection, setCommentSelection] = useState<{ line: number; endLine?: number; x: number; y: number } | null>(null);
   const [popoverText, setPopoverText] = useState("");
   const [comments, setComments] = useState<{ id: string; lineNumber: number; content: string; authorName: string | null; authorEmail: string | null; authorId: string; resolvedAt: string | null; resolvedById: string | null; createdAt: string }[]>([]);
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
@@ -470,11 +470,24 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                 onMouseUp={(e) => {
                   const sel = window.getSelection();
                   if (!sel || sel.isCollapsed || !sel.toString().trim()) { setCommentSelection(null); return; }
-                  const rect = sel.getRangeAt(0).getBoundingClientRect();
+                  const range = sel.getRangeAt(0);
                   const articleRect = e.currentTarget.getBoundingClientRect();
                   const lineHeight = 24;
-                  const line = Math.floor((rect.top - articleRect.top) / lineHeight) + 1;
-                  setCommentSelection({ line: Math.max(1, line), x: Math.min(rect.right + 12, window.innerWidth - 320), y: rect.bottom + 4 + window.scrollY });
+                  const startLine = Math.floor((range.getBoundingClientRect().top - articleRect.top) / lineHeight) + 1;
+                  const selectedText = sel.toString();
+                  const lineCount = selectedText.split("\n").length;
+                  const endLine = lineCount > 1 ? startLine + lineCount - 1 : undefined;
+
+                  let node: Node | null = range.endContainer;
+                  while (node && node.nodeType !== 1) node = node.parentElement;
+                  const endRect = (node as Element)?.getBoundingClientRect?.() || range.getBoundingClientRect();
+
+                  setCommentSelection({
+                    line: Math.max(1, startLine),
+                    endLine,
+                    x: Math.min(endRect.right + 12, window.innerWidth - 320),
+                    y: endRect.bottom + 4 + window.scrollY,
+                  });
                 }}
               >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
@@ -631,7 +644,9 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
       {commentSelection && (
         <div className="fixed z-[100] rounded-xl border border-[#e5e5ea] bg-white shadow-2xl" style={{ left: `${commentSelection.x}px`, top: `${commentSelection.y}px` }}>
           <div className="px-3 py-2 border-b border-[#f5f5f7]">
-            <span className="text-[11px] font-medium text-[#86868b]">Comment on line {commentSelection.line}</span>
+            <span className="text-[11px] font-medium text-[#86868b]">
+              Comment on {commentSelection.endLine ? `lines ${commentSelection.line}–${commentSelection.endLine}` : `line ${commentSelection.line}`}
+            </span>
           </div>
           <div className="p-3">
             <textarea autoFocus className="w-[280px] rounded-lg border border-[#e5e5ea] bg-[#f9f9fb] px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] focus:bg-white resize-none" rows={3}
