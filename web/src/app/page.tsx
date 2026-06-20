@@ -410,14 +410,16 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
     const line = lineNum ?? (parseInt(commentLine) || 0);
     const text = lineNum != null ? popoverText : commentText;
     if (!doc || !text.trim()) return;
+    setError(null);
     try {
-      await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`, {
+      const res = await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lineNumber: line, content: text.trim() }),
       });
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error || "Failed to add comment"); }
       setCommentText(""); setCommentLine(""); setPopoverText(""); setCommentSelection(null);
       loadComments();
-    } catch {}
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to add comment"); }
   }
 
   async function resolveComment(commentId: string) {
@@ -428,7 +430,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         body: JSON.stringify({ resolved: true }),
       });
       loadComments();
-    } catch {}
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to resolve"); }
   }
 
   async function deleteComment(commentId: string) {
@@ -436,7 +438,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
     try {
       await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments/${commentId}`, { method: "DELETE" });
       loadComments();
-    } catch {}
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed to delete"); }
   }
 
   useEffect(() => { if (doc) loadComments(); }, [doc]);
@@ -493,6 +495,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                 }, 10);
               }}
             >
+              {error && <div className="mx-4 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs text-red-600 w-full max-w-[720px]">{error}</div>}
               <article className="branch-markdown w-full max-w-[720px] px-10 py-12">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
               </article>

@@ -4,18 +4,28 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   const { token } = await params;
 
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "https://branchcli.vercel.app"}/api/share/${token}`, { cache: "no-store" });
+    const apiUrl = process.env.NEXT_PUBLIC_APP_URL || "https://branchcli.vercel.app";
+    const res = await fetch(`${apiUrl}/api/share/${token}`, { cache: "no-store" });
     if (!res.ok) throw new Error("Not found");
     const data = await res.json();
 
     const docName = data.documentPath?.split("/").pop()?.replace(".md", "") || data.workspace;
+    const title = `${docName} — Shared via Branch`;
+    const description = `"${docName}" from the ${data.workspace} workspace. Read-only.`;
+
     return {
-      title: `${docName} — Branch`,
-      description: `Read "${docName}" from the ${data.workspace} workspace on Branch.`,
+      title,
+      description,
       openGraph: {
-        title: `${docName} — Branch`,
-        description: `Read "${docName}" from the ${data.workspace} workspace on Branch.`,
+        title,
+        description,
         type: "article",
+        siteName: "Branch",
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description,
       },
     };
   } catch {
