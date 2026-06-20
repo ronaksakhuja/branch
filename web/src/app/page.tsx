@@ -407,7 +407,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   }
 
   async function addComment(lineNum?: number) {
-    const line = lineNum ?? (parseInt(commentLine) || 0);
+    const line = lineNum ?? 0;
     const text = lineNum != null ? popoverText : commentText;
     if (!doc || !text.trim()) return;
     setError(null);
@@ -468,17 +468,20 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         <main className="flex flex-1 flex-col overflow-hidden">
           {mode === "view" && (
             <div
-              className="flex flex-1 flex-col items-center overflow-y-auto select-text"
+              className="flex flex-1 flex-col items-center overflow-y-auto"
               onMouseUp={(e) => {
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                   const sel = window.getSelection();
                   if (!sel || sel.isCollapsed || !sel.toString().trim()) { setCommentSelection(null); return; }
                   const range = sel.getRangeAt(0);
-                  const container = e.currentTarget;
-                  const containerRect = container.getBoundingClientRect();
+                  const container = e.currentTarget as HTMLElement;
+                  const article = container.querySelector("article");
+                  if (!article) return;
+                  const articleRect = article.getBoundingClientRect();
                   const lineHeight = 24;
                   const scrollTop = container.scrollTop;
-                  const startLine = Math.floor((range.getBoundingClientRect().top - containerRect.top + scrollTop) / lineHeight) + 1;
+                  const selectionTop = range.getBoundingClientRect().top;
+                  const startLine = Math.floor((selectionTop - articleRect.top + scrollTop) / lineHeight) + 1;
                   const lineCount = sel.toString().split("\n").length;
                   const endLine = lineCount > 1 ? startLine + lineCount - 1 : undefined;
 
@@ -492,49 +495,13 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                     x: Math.min(endRect.right + 12, window.innerWidth - 320),
                     y: endRect.bottom + 4,
                   });
-                }, 10);
+                });
               }}
             >
               {error && <div className="mx-4 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs text-red-600 w-full max-w-[720px]">{error}</div>}
               <article className="branch-markdown w-full max-w-[720px] px-10 py-12">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
               </article>
-
-              <div className="w-full max-w-[720px] px-10 pb-16">
-                <div className="border-t border-[#e5e5ea] pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[13px] font-semibold text-[#1d1d1f]">Comments</h3>
-                    <span className="text-[11px] text-[#86868b]">{comments.filter(c => !c.resolvedAt).length} open</span>
-                  </div>
-
-                  {comments.sort((a, b) => a.lineNumber - b.lineNumber).map((c) => (
-                    <div key={c.id} className={`mb-2 rounded-lg px-4 py-3 border ${c.resolvedAt ? "border-amber-100 bg-amber-50/50" : "border-[#e5e5ea] bg-white"}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center text-[10px] font-bold uppercase">{(c.authorName || c.authorEmail || "?")[0]}</div>
-                          <div>
-                            <span className="text-[12px] font-medium text-[#1d1d1f]">{c.authorName || c.authorEmail?.split("@")[0]}</span>
-                            <span className="ml-2 text-[10px] text-[#86868b]">Line {c.lineNumber}</span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-[#86868b]">{new Date(c.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
-                      </div>
-                      <p className={`mt-2 text-[13px] leading-relaxed ${c.resolvedAt ? "line-through text-[#86868b]" : "text-[#1d1d1f]"}`}>{c.content}</p>
-                      <div className="mt-2 flex gap-3">
-                        {!c.resolvedAt && <button onClick={() => resolveComment(c.id)} className="text-[11px] text-[#0071e3] hover:underline">Resolve</button>}
-                        {c.authorId === userId && !c.resolvedAt && <button onClick={() => deleteComment(c.id)} className="text-[11px] text-[#ff3b30] hover:underline">Delete</button>}
-                        {c.resolvedAt && <span className="text-[11px] text-amber-600 font-medium">Resolved</span>}
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="mt-4 flex gap-2">
-                    <input className="w-16 rounded-lg border border-[#e5e5ea] bg-white px-2.5 py-2 text-[13px] outline-none focus:border-[#0071e3]" placeholder="Ln" value={commentLine} onChange={(e) => setCommentLine(e.target.value)} />
-                    <input className="flex-1 rounded-lg border border-[#e5e5ea] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]" placeholder="Write a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addComment()} />
-                    <button onClick={() => addComment()} className="rounded-full bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
@@ -599,7 +566,8 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                   {[...comments].sort((a, b) => a.lineNumber - b.lineNumber).map((c) => (
                     <div key={c.id} className={`rounded-md border px-2.5 py-1.5 ${c.resolvedAt ? "border-amber-100 bg-amber-50/50" : "border-[#e5e5ea]"}`}>
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium text-[#0071e3]">Ln {c.lineNumber}</span>
+                        {c.lineNumber > 0 && <span className="text-[10px] font-medium text-[#0071e3]">Ln {c.lineNumber}</span>}
+                        {c.lineNumber === 0 && <span />}
                         <span className="text-[10px] text-[#86868b]">{new Date(c.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
                       </div>
                       <p className={`mt-0.5 text-[11px] leading-relaxed ${c.resolvedAt ? "line-through text-[#86868b]" : "text-[#1d1d1f]"}`}>{c.content}</p>
@@ -614,11 +582,9 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-[#e5e5ea] p-2 space-y-1.5">
-                  <input className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3]" placeholder="Line number" value={commentLine} onChange={(e) => setCommentLine(e.target.value)} />
-                  <textarea className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3] resize-none" rows={2} placeholder="Comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }} />
-                  <button onClick={() => addComment()} className="w-full rounded-md bg-[#0071e3] py-1 text-[11px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
-                </div>
+                <div className="border-t border-[#e5e5ea] p-3">
+                <p className="text-[10px] text-[#86868b] text-center">Select text in the document to add a comment</p>
+              </div>
               </>
             ) : (
               <>
