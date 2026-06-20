@@ -352,6 +352,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [inviteEmail, setInviteEmail] = useState("");
   const [commentLine, setCommentLine] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [sidebarTab, setSidebarTab] = useState<"comments" | "versions">("comments");
   const [commentSelection, setCommentSelection] = useState<{ line: number; endLine?: number; x: number; y: number } | null>(null);
   const [popoverText, setPopoverText] = useState("");
   const [comments, setComments] = useState<{ id: string; lineNumber: number; content: string; authorName: string | null; authorEmail: string | null; authorId: string; resolvedAt: string | null; resolvedById: string | null; createdAt: string }[]>([]);
@@ -464,18 +465,19 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col overflow-hidden">
           {mode === "view" && (
-            <div className="flex flex-1 flex-col items-center overflow-y-auto">
-              <article
-                className="branch-markdown w-full max-w-[720px] px-10 py-12 select-text"
-                onMouseUp={(e) => {
+            <div
+              className="flex flex-1 flex-col items-center overflow-y-auto select-text"
+              onMouseUp={(e) => {
+                setTimeout(() => {
                   const sel = window.getSelection();
                   if (!sel || sel.isCollapsed || !sel.toString().trim()) { setCommentSelection(null); return; }
                   const range = sel.getRangeAt(0);
-                  const articleRect = e.currentTarget.getBoundingClientRect();
+                  const container = e.currentTarget;
+                  const containerRect = container.getBoundingClientRect();
                   const lineHeight = 24;
-                  const startLine = Math.floor((range.getBoundingClientRect().top - articleRect.top) / lineHeight) + 1;
-                  const selectedText = sel.toString();
-                  const lineCount = selectedText.split("\n").length;
+                  const scrollTop = container.scrollTop;
+                  const startLine = Math.floor((range.getBoundingClientRect().top - containerRect.top + scrollTop) / lineHeight) + 1;
+                  const lineCount = sel.toString().split("\n").length;
                   const endLine = lineCount > 1 ? startLine + lineCount - 1 : undefined;
 
                   let node: Node | null = range.endContainer;
@@ -486,10 +488,12 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                     line: Math.max(1, startLine),
                     endLine,
                     x: Math.min(endRect.right + 12, window.innerWidth - 320),
-                    y: endRect.bottom + 4 + window.scrollY,
+                    y: endRect.bottom + 4,
                   });
-                }}
-              >
+                }, 10);
+              }}
+            >
+              <article className="branch-markdown w-full max-w-[720px] px-10 py-12">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
               </article>
 
@@ -564,6 +568,12 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         </main>
 
         <aside className="w-[240px] flex-shrink-0 border-l border-[#e5e5ea] bg-white flex flex-col">
+          <div className="flex border-b border-[#e5e5ea]">
+            {(["comments", "versions"] as const).map((t) => (
+              <button key={t} onClick={() => setSidebarTab(t)}
+                className={`flex-1 py-2 text-[11px] font-semibold capitalize text-center transition ${sidebarTab === t ? "text-[#1d1d1f] border-b-2 border-[#0071e3] -mb-px" : "text-[#86868b] hover:text-[#1d1d1f]"}`}>{t}</button>
+            ))}
+          </div>
           <div className="border-b border-[#e5e5ea] px-3 py-2.5">
             <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Mode</p>
             <div className="flex rounded-lg bg-[#f5f5f7] p-0.5">
@@ -575,9 +585,43 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
-            <div className="px-1.5 space-y-0.5">
-              {[...doc.versions].reverse().map((v) => (
+            {sidebarTab === "comments" ? (
+              <>
+                <div className="px-3 py-2.5 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Comments</p>
+                  <span className="text-[10px] text-[#86868b]">{comments.filter(c => !c.resolvedAt).length} open</span>
+                </div>
+                <div className="px-2 space-y-1.5">
+                  {comments.length === 0 && <p className="py-4 text-center text-[11px] text-[#86868b]">No comments yet</p>}
+                  {[...comments].sort((a, b) => a.lineNumber - b.lineNumber).map((c) => (
+                    <div key={c.id} className={`rounded-md border px-2.5 py-1.5 ${c.resolvedAt ? "border-amber-100 bg-amber-50/50" : "border-[#e5e5ea]"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-[#0071e3]">Ln {c.lineNumber}</span>
+                        <span className="text-[10px] text-[#86868b]">{new Date(c.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                      </div>
+                      <p className={`mt-0.5 text-[11px] leading-relaxed ${c.resolvedAt ? "line-through text-[#86868b]" : "text-[#1d1d1f]"}`}>{c.content}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-[#86868b]">{c.authorName || c.authorEmail?.split("@")[0]}</span>
+                        <div className="flex gap-1.5">
+                          {!c.resolvedAt && <button onClick={() => resolveComment(c.id)} className="text-[10px] text-[#0071e3] hover:underline">Resolve</button>}
+                          {c.authorId === userId && !c.resolvedAt && <button onClick={() => deleteComment(c.id)} className="text-[10px] text-[#ff3b30] hover:underline">Delete</button>}
+                          {c.resolvedAt && <span className="text-[10px] text-amber-600">Resolved</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-[#e5e5ea] p-2 space-y-1.5">
+                  <input className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3]" placeholder="Line number" value={commentLine} onChange={(e) => setCommentLine(e.target.value)} />
+                  <textarea className="w-full rounded-md border border-[#e5e5ea] px-2 py-1 text-[11px] outline-none focus:border-[#0071e3] resize-none" rows={2} placeholder="Comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }} />
+                  <button onClick={() => addComment()} className="w-full rounded-md bg-[#0071e3] py-1 text-[11px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-3 py-2.5"><p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Versions</p></div>
+                <div className="px-1.5 space-y-0.5">
+                  {[...doc.versions].reverse().map((v) => (
                     <button key={v.id} onClick={() => selectVersion(v)}
                       className={`w-full rounded-md px-2.5 py-2 text-left transition ${selectedVersion?.id === v.id ? "bg-[#0071e3]/10" : "hover:bg-[#f5f5f7]"}`}>
                       <div className="flex items-center justify-between">
@@ -587,8 +631,10 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                       <p className="mt-0.5 text-[12px] text-[#86868b] line-clamp-2">{v.summary}</p>
                       <p className="mt-0.5 text-[10px] text-[#c5c5ca]">{v.authorName}</p>
                     </button>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="border-t border-[#e5e5ea] p-3 space-y-2">
