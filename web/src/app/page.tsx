@@ -352,6 +352,8 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
   const [inviteEmail, setInviteEmail] = useState("");
   const [commentLine, setCommentLine] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [commentSelection, setCommentSelection] = useState<{ line: number; x: number; y: number } | null>(null);
+  const [popoverText, setPopoverText] = useState("");
   const [comments, setComments] = useState<{ id: string; lineNumber: number; content: string; authorName: string | null; authorEmail: string | null; authorId: string; resolvedAt: string | null; resolvedById: string | null; createdAt: string }[]>([]);
   const docCache = useRef<Map<string, DocumentRecord>>(new Map());
 
@@ -403,15 +405,16 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
     } catch {}
   }
 
-  async function addComment() {
-    if (!doc || !commentText.trim() || !commentLine) return;
-    const line = parseInt(commentLine) || 0;
+  async function addComment(lineNum?: number) {
+    const line = lineNum ?? (parseInt(commentLine) || 0);
+    const text = lineNum != null ? popoverText : commentText;
+    if (!doc || !text.trim()) return;
     try {
       await fetch(`/api/workspaces/${workspaceId}/documents/${encodeURIComponent(doc.path)}/comments`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineNumber: line, content: commentText.trim() }),
+        body: JSON.stringify({ lineNumber: line, content: text.trim() }),
       });
-      setCommentText(""); setCommentLine("");
+      setCommentText(""); setCommentLine(""); setPopoverText(""); setCommentSelection(null);
       loadComments();
     } catch {}
   }
@@ -462,7 +465,18 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
         <main className="flex flex-1 flex-col overflow-hidden">
           {mode === "view" && (
             <div className="flex flex-1 flex-col items-center overflow-y-auto">
-              <article className="branch-markdown w-full max-w-[720px] px-10 py-12">
+              <article
+                className="branch-markdown w-full max-w-[720px] px-10 py-12 select-text"
+                onMouseUp={(e) => {
+                  const sel = window.getSelection();
+                  if (!sel || sel.isCollapsed || !sel.toString().trim()) { setCommentSelection(null); return; }
+                  const rect = sel.getRangeAt(0).getBoundingClientRect();
+                  const articleRect = e.currentTarget.getBoundingClientRect();
+                  const lineHeight = 24;
+                  const line = Math.floor((rect.top - articleRect.top) / lineHeight) + 1;
+                  setCommentSelection({ line: Math.max(1, line), x: Math.min(rect.right + 12, window.innerWidth - 320), y: rect.bottom + 4 + window.scrollY });
+                }}
+              >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>
               </article>
 
@@ -497,7 +511,7 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                   <div className="mt-4 flex gap-2">
                     <input className="w-16 rounded-lg border border-[#e5e5ea] bg-white px-2.5 py-2 text-[13px] outline-none focus:border-[#0071e3]" placeholder="Ln" value={commentLine} onChange={(e) => setCommentLine(e.target.value)} />
                     <input className="flex-1 rounded-lg border border-[#e5e5ea] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]" placeholder="Write a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addComment()} />
-                    <button onClick={addComment} className="rounded-full bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
+                    <button onClick={() => addComment()} className="rounded-full bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition hover:bg-[#0077ed]">Post</button>
                   </div>
                 </div>
               </div>
@@ -609,6 +623,26 @@ function DocumentView({ workspaceId, workspace, userId, workspaces }: { workspac
                   <div key={inv.id} className="flex items-center justify-between bg-amber-50/60 rounded-lg px-3 py-1.5"><span className="text-[13px]">{inv.email}</span><button onClick={() => cancelInv(inv.id)} className="text-[12px] text-[#ff3b30] hover:underline">Cancel</button></div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {commentSelection && (
+        <div className="fixed z-[100] rounded-xl border border-[#e5e5ea] bg-white shadow-2xl" style={{ left: `${commentSelection.x}px`, top: `${commentSelection.y}px` }}>
+          <div className="px-3 py-2 border-b border-[#f5f5f7]">
+            <span className="text-[11px] font-medium text-[#86868b]">Comment on line {commentSelection.line}</span>
+          </div>
+          <div className="p-3">
+            <textarea autoFocus className="w-[280px] rounded-lg border border-[#e5e5ea] bg-[#f9f9fb] px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] focus:bg-white resize-none" rows={3}
+              placeholder="Write a comment..."
+              value={popoverText}
+              onChange={(e) => setPopoverText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(commentSelection.line); } if (e.key === "Escape") setCommentSelection(null); }}
+            />
+            <div className="flex justify-end gap-2 mt-2">
+              <button onClick={() => { setCommentSelection(null); setPopoverText(""); }} className="rounded-full border border-[#e5e5ea] px-3 py-1 text-[12px] text-[#86868b] transition hover:bg-[#f5f5f7]">Cancel</button>
+              <button onClick={() => addComment(commentSelection.line)} disabled={!popoverText.trim()} className="rounded-full bg-[#0071e3] px-4 py-1 text-[12px] font-medium text-white transition hover:bg-[#0077ed] disabled:opacity-30">Comment</button>
             </div>
           </div>
         </div>
